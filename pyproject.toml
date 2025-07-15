@@ -1,7 +1,7 @@
 [project]
-name = "example_package"
-description = "example package"
-version = "0.1.0"
+name = "biglog"
+description = "Access massive log files with line wrapping"
+version = "0.0.1"
 authors = [
     { name = "Random Hacker", email = "no@dev.null" }
 ]
