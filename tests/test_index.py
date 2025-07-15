@@ -2,9 +2,8 @@
 
 import tempfile
 from pathlib import Path
-import numpy as np
 
-from biglog.index import DisplayWidths, WrapTreeNode, IndexMetadata
+from biglog.index import DisplayWidths, IndexMetadata
 
 
 class TestDisplayWidths:
@@ -44,8 +43,8 @@ class TestDisplayWidths:
 
             # Test range access
             result = dw.get_range(1, 4)
-            expected = np.array([20, 30, 40], dtype=np.uint16)
-            np.testing.assert_array_equal(result, expected)
+            expected = [20, 30, 40]
+            assert list(result) == expected
 
             dw.close()
 
@@ -70,80 +69,7 @@ class TestDisplayWidths:
             dw2.close()
 
 
-class TestWrapTreeNode:
-    """Test WrapTreeNode functionality."""
-
-    def test_bucket_assignment(self):
-        """Test histogram bucket assignment."""
-        node = WrapTreeNode()
-
-        # Test various widths
-        assert node.find_bucket(10) == 0  # First bucket
-        assert node.find_bucket(50) == 1  # Second bucket
-        assert node.find_bucket(90) == 3  # Fourth bucket
-        assert node.find_bucket(1000) == 13  # Near end
-        assert node.find_bucket(100000) == 15  # Last bucket
-
-    def test_histogram_updates(self):
-        """Test adding widths to histogram."""
-        node = WrapTreeNode()
-
-        # Add some widths
-        node.add_width(40)
-        node.add_width(45)
-        node.add_width(80)
-        node.add_width(80)
-
-        # Check histogram - based on actual bucket boundaries
-        # 40, 45 -> bucket 1 (40-60 range)
-        # 80, 80 -> bucket 3 (80-100 range)
-        assert node.histogram[1] == 2  # Two widths in 40-60 range
-        assert node.histogram[3] == 2  # Two widths in 80-100 range
-
-    def test_row_estimation(self):
-        """Test display row estimation."""
-        node = WrapTreeNode()
-
-        # Add known widths
-        node.add_width(40)  # Should be 1 row at width 80
-        node.add_width(120)  # Should be 2 rows at width 80
-        node.add_width(200)  # Should be 3 rows at width 80
-
-        # Estimate at width 80
-        estimated = node.estimate_rows(80)
-
-        # Should be approximately 6 rows total
-        # (exact depends on bucket centers)
-        assert 5 <= estimated <= 7
-
-    def test_serialization(self):
-        """Test node serialization/deserialization."""
-        node = WrapTreeNode()
-        node.start_line = 100
-        node.end_line = 200
-        node.is_leaf = False
-        node.fanout = 3
-        node.child_offsets = [1000, 2000, 3000]
-
-        # Add some histogram data
-        node.add_width(50)
-        node.add_width(100)
-
-        # Serialize and deserialize
-        data = node.to_bytes()
-        assert len(data) == WrapTreeNode.NODE_SIZE
-
-        node2 = WrapTreeNode.from_bytes(data)
-
-        # Check fields
-        assert node2.start_line == 100
-        assert node2.end_line == 200
-        assert not node2.is_leaf
-        assert node2.fanout == 3
-        assert node2.child_offsets == [1000, 2000, 3000]
-
-        # Check histogram
-        np.testing.assert_array_equal(node2.histogram, node.histogram)
+# WrapTreeNode tests removed - using array-based storage now
 
 
 class TestIndexMetadata:

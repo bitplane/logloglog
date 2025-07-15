@@ -30,7 +30,7 @@ class LogView:
         Get text at display row.
 
         Args:
-            row_no: Display row number (0-based within this view)
+            row_no: Display row number (0-based within this view, negative indexing supported)
 
         Returns:
             Text at the display row (may be partial line if wrapped)
@@ -38,11 +38,13 @@ class LogView:
         Raises:
             IndexError: If row_no is out of bounds
         """
-        if row_no < 0:
-            # Support negative indexing
-            row_no = len(self) + row_no
+        view_length = len(self)
 
-        if row_no < 0 or row_no >= len(self):
+        # Handle negative indexing
+        if row_no < 0:
+            row_no = view_length + row_no
+
+        if row_no < 0 or row_no >= view_length:
             raise IndexError(f"Display row {row_no} out of range")
 
         # Convert view-relative row to absolute display row
