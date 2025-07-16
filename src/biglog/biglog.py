@@ -16,7 +16,6 @@ from .wraptree import WrapTree
 
 # Configure logger
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 @lru_cache(maxsize=100000)
