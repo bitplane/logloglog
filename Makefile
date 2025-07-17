@@ -3,7 +3,7 @@
 		pre-commit update-pre-commit
 
 
-PROJECT_NAME := biglog
+PROJECT_NAME := logloglog
 
 
 all: dev coverage  ## builds everything
@@ -23,7 +23,7 @@ docs: .docs/index.html ## build the documentation
 clean:  ## delete caches and the venv
 	scripts/clean.sh
 
-.log.pid:  scripts/log_log_log.sh ## create log.log.log from system logs
+.log.pid log.log.log:  scripts/log_log_log.sh ## create log.log.log from system logs
 	scripts/log_log_log.sh
 
 log: .log.pid  ## create log.log.log from system logs

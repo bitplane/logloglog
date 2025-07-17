@@ -1,4 +1,4 @@
-"""Main BigLog implementation."""
+"""Main LogLogLog implementation."""
 
 import os
 import time
@@ -7,12 +7,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Callable, List, Iterator, Tuple
 from wcwidth import wcswidth
-import platformdirs
 
 from .logview import LogView
 from .index import DisplayWidths
 from .wraptree import WrapTree
-from .array import Array
+from .core.array import Array
+from .cache import Cache
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -39,11 +39,11 @@ def default_split_lines(text: str) -> List[str]:
     return lines
 
 
-class BigLog(LogView):
+class LogLogLog(LogView):
     """
     Efficient scrollback indexing for large log files.
 
-    BigLog provides O(log n) seeking through large logs at any terminal width.
+    LogLogLog provides O(log n) seeking through large logs at any terminal width.
     """
 
     def __init__(
@@ -51,28 +51,26 @@ class BigLog(LogView):
         path: Path | str,
         get_width: Callable[[str], int] = None,
         split_lines: Callable[[str], List[str]] = None,
-        cache_dir: Path = None,
+        cache: Cache = None,
     ):
         """
-        Initialize BigLog for a file.
+        Initialize LogLogLog for a file.
 
         Args:
             path: Log file path
             get_width: Function to calculate display width (defaults to wcwidth)
             split_lines: Function to split text into lines (defaults to newline split)
-            cache_dir: Cache directory (auto-detected if None)
+            cache: Cache instance (auto-created if None)
         """
         self.path = Path(path).resolve()  # Resolve symlinks
         self.get_width = get_width or default_get_width
         self.split_lines = split_lines or default_split_lines
 
-        # Set up cache directory
-        if cache_dir is None:
-            cache_dir = Path(platformdirs.user_cache_dir("biglog"))
-        self.cache_dir = cache_dir
+        # Set up cache
+        self.cache = cache or Cache()
 
         # Initialize index components
-        self._index_path = self._get_index_path()
+        self._index_path = self.cache.get_dir(self.path)
         self._display_widths = DisplayWidths(self._index_path)
         self._wraptree = WrapTree(self._index_path, self._display_widths)
 
@@ -90,16 +88,10 @@ class BigLog(LogView):
         # Initialize as a LogView of the entire log
         super().__init__(self, float("inf"), 0)
 
-    def _get_index_path(self) -> Path:
-        """Get the index directory path based on file identity."""
-        stat = os.stat(self.path)
-        index_name = f"{stat.st_dev}_{stat.st_ino}"
-        return self.cache_dir / index_name
-
     def _open(self):
         """Open the log file and index."""
         start_time = time.time()
-        logger.info(f"Opening BigLog for {self.path}")
+        logger.info(f"Opening LogLogLog for {self.path}")
 
         # Get file stats
         stat_start = time.time()
@@ -180,10 +172,13 @@ class BigLog(LogView):
 
     def _clear_index(self):
         """Clear the index directory."""
+        # Clear the cache directory for this file
         import shutil
 
         if self._index_path.exists():
             shutil.rmtree(self._index_path)
+        # Get a fresh cache directory
+        self._index_path = self.cache.get_dir(self.path)
         self._last_position = 0
 
     def close(self):

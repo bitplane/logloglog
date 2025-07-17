@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Tuple
 from .index import DisplayWidths
-from .array import Array
+from .core.array import Array
 
 # Configure logger
 logger = logging.getLogger(__name__)

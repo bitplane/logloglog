@@ -4,7 +4,7 @@ import tempfile
 import pytest
 from pathlib import Path
 
-from biglog.index import DisplayWidths
+from logloglog.index import DisplayWidths
 
 
 @pytest.fixture

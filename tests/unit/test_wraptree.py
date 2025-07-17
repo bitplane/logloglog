@@ -3,8 +3,8 @@
 import pytest
 import tempfile
 from pathlib import Path
-from biglog.wraptree import WrapTree, BIGL_MAGIC, CURRENT_VERSION, ROOT_NODE_START
-from biglog.index import DisplayWidths
+from logloglog.wraptree import WrapTree, BIGL_MAGIC, CURRENT_VERSION, ROOT_NODE_START
+from logloglog.index import DisplayWidths
 
 
 @pytest.fixture

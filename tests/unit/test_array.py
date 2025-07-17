@@ -3,7 +3,7 @@ import os
 import tempfile
 import struct
 
-from biglog.array import Array
+from logloglog.core.array import Array
 
 
 @pytest.fixture

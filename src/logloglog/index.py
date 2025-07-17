@@ -1,7 +1,7 @@
-"""Index data structures for BigLog."""
+"""Index data structures for LogLogLog."""
 
 from pathlib import Path
-from .array import Array
+from .core.array import Array
 
 
 class DisplayWidths:
@@ -45,6 +45,3 @@ class DisplayWidths:
     def __len__(self) -> int:
         """Get number of stored widths."""
         return len(self._array)
-
-
-# WrapTreeNode removed - using array-based storage in WrapTree instead

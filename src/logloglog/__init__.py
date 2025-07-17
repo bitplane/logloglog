@@ -1,19 +1,19 @@
-"""BigLog - Efficient scrollback indexing for large log files."""
+"""LogLogLog - Efficient scrollback indexing for large log files."""
 
 import logging
 import sys
 
 
-from .biglog import BigLog
+from .logloglog import LogLogLog
 from .logview import LogView
 
-__version__ = "0.1.0"
-__all__ = ["BigLog", "LogView", "configure_logging"]
+__version__ = "0.0.1"
+__all__ = ["LogLogLog", "LogView", "configure_logging"]
 
 
-# Configure logging for BigLog
+# Configure logging for LogLogLog
 def configure_logging(level=logging.INFO):
-    """Configure logging for BigLog."""
+    """Configure logging for LogLogLog."""
     # Create formatter
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
@@ -21,8 +21,8 @@ def configure_logging(level=logging.INFO):
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(formatter)
 
-    # Configure biglog loggers
-    for logger_name in ["biglog.biglog", "biglog.wraptree", "biglog.index"]:
+    # Configure logloglog loggers
+    for logger_name in ["logloglog.logloglog", "logloglog.wraptree", "logloglog.index"]:
         logger = logging.getLogger(logger_name)
         logger.setLevel(level)
         # Remove existing handlers to avoid duplicates

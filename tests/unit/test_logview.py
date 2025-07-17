@@ -4,7 +4,9 @@ import tempfile
 import os
 import pytest
 from pathlib import Path
-from biglog import BigLog
+
+from logloglog import LogLogLog
+from logloglog.cache import Cache
 
 
 @pytest.fixture
@@ -19,7 +21,7 @@ def log_with_incremental_lines(temp_cache_dir):
     """Create a log file with incremental line lengths for testing."""
     lines = []
 
-    # Lines from 0 to 80 chars: "0", "01", "012", ... "012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+    # Lines from 0 to 80 chars: "0", "01", "012", ...
     for i in range(81):
         line = "".join(str(j % 10) for j in range(i))
         lines.append(line)
@@ -35,7 +37,7 @@ def log_with_incremental_lines(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         yield log
         log.close()
     finally:
@@ -52,7 +54,7 @@ def test_view_width_consistency(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log) == 3
 
         # Test different widths
@@ -184,7 +186,7 @@ def test_multi_line_wrapping(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
 
         # Test at width 20 - the 100-char line should become 5 rows
         view = log.at(20)
@@ -226,7 +228,7 @@ def test_view_with_real_file(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
 
         # Should have 3 lines
         assert len(log) == 3
@@ -256,7 +258,7 @@ def test_view_with_explicit_end(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
 
         # Create view with explicit start and end
         view = log.at(80, start=1, end=4)  # This should trigger line 73
@@ -283,11 +285,11 @@ def test_view_iteration(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         view = log.at(80)
 
         # Test iteration using __iter__
-        rows = list(view)  # This calls __iter__ and yields each row
+        rows = list(view)
         assert rows == ["A", "B", "C"]
 
         # Test iteration in a loop

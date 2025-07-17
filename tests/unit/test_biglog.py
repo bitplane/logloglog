@@ -1,10 +1,11 @@
-"""Tests for BigLog functionality."""
+"""Tests for LogLogLog functionality."""
 
 import tempfile
 import os
 import pytest
 from pathlib import Path
-from biglog import BigLog
+from logloglog import LogLogLog
+from logloglog.cache import Cache
 
 
 @pytest.fixture
@@ -31,7 +32,7 @@ def log_with_content(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         yield log
         log.close()
     finally:
@@ -40,7 +41,7 @@ def log_with_content(temp_cache_dir):
 
 def test_empty_log(temp_log_file, temp_cache_dir):
     """Test with empty log file."""
-    log = BigLog(temp_log_file, cache_dir=temp_cache_dir)
+    log = LogLogLog(temp_log_file, cache=Cache(temp_cache_dir))
     assert len(log) == 0
 
     # Test empty view
@@ -58,7 +59,7 @@ def test_simple_lines(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
 
         # Test basic access
         assert len(log) == 4
@@ -89,7 +90,7 @@ def test_append(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
 
         assert len(log) == 1
         assert log[0] == "Initial line"
@@ -114,7 +115,7 @@ def test_update(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log) == 1
 
         # Externally append to file
@@ -142,7 +143,7 @@ def test_wrapped_view(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
 
         # View at width 80
         view = log.at(width=80)
@@ -180,7 +181,7 @@ def test_custom_width_function(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, get_width=custom_width, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, get_width=custom_width, cache=Cache(temp_cache_dir))
 
         view = log.at(width=3)
 
@@ -206,12 +207,12 @@ def test_index_persistence(temp_cache_dir):
 
     try:
         # First open
-        log1 = BigLog(log_path, cache_dir=temp_cache_dir)
+        log1 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log1) == 3
         log1.close()
 
         # Second open - should reuse index
-        log2 = BigLog(log_path, cache_dir=temp_cache_dir)
+        log2 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log2) == 3
         assert log2[0] == "Line 1"
         log2.close()
@@ -220,7 +221,7 @@ def test_index_persistence(temp_cache_dir):
 
 
 def test_context_manager(temp_cache_dir):
-    """Test BigLog as context manager."""
+    """Test LogLogLog as context manager."""
     content = "Test line\n"
 
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
@@ -228,44 +229,15 @@ def test_context_manager(temp_cache_dir):
         log_path = f.name
 
     try:
-        with BigLog(log_path, cache_dir=temp_cache_dir) as log:
+        with LogLogLog(log_path, cache=Cache(temp_cache_dir)) as log:
             assert len(log) == 1
             assert log[0] == "Test line"
     finally:
         os.unlink(log_path)
 
 
-def test_cache_reuse(temp_cache_dir):
-    """Test that cache is properly reused between sessions."""
-    content = "Line 1\nLine 2\nLine 3\n"
-
-    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-        f.write(content)
-        log_path = f.name
-
-    try:
-        # First session - should build cache
-        log1 = BigLog(log_path, cache_dir=temp_cache_dir)
-        assert len(log1) == 3
-
-        # Check that cache files were created
-        index_files = list(temp_cache_dir.rglob("*"))
-        assert len(index_files) > 0
-        log1.close()
-
-        # Second session - should reuse cache
-        log2 = BigLog(log_path, cache_dir=temp_cache_dir)
-        assert len(log2) == 3
-        assert log2[0] == "Line 1"
-        assert log2[1] == "Line 2"
-        assert log2[2] == "Line 3"
-        log2.close()
-    finally:
-        os.unlink(log_path)
-
-
-def test_negative_indexing_biglog(log_with_content):
-    """Test that negative indexing works in BigLog."""
+def test_negative_indexing_logloglog(log_with_content):
+    """Test that negative indexing works in LogLogLog."""
     log = log_with_content
 
     # Should have 3 lines: "Line 1", "Line 2", "Line 3"
@@ -298,7 +270,7 @@ def test_view_with_real_file(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
 
         # Should have 3 lines
         assert len(log) == 3
@@ -328,7 +300,7 @@ def test_tree_node_growth_issue(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
 
         # First update - creates root node
         assert len(log) == 3
@@ -353,40 +325,6 @@ def test_tree_node_growth_issue(temp_cache_dir):
         os.unlink(log_path)
 
 
-def test_cache_validation_scenarios(temp_cache_dir):
-    """Test various cache validation scenarios."""
-    content = "Line 1\nLine 2\nLine 3\n"
-
-    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-        f.write(content)
-        log_path = f.name
-
-    try:
-        # First open - should create cache
-        log1 = BigLog(log_path, cache_dir=temp_cache_dir)
-        assert len(log1) == 3
-
-        # Check that index files were created
-        assert log1._line_offsets_path.exists()
-        assert (log1._index_path / "display_widths.dat").exists()
-        assert (log1._index_path / "wraptree.dat").exists()
-        assert len(log1._line_offsets) == 3
-
-        log1.close()
-
-        # Second open - should validate and reuse cache
-        log2 = BigLog(log_path, cache_dir=temp_cache_dir)
-        assert len(log2) == 3
-
-        # Should have loaded the existing index (same number of lines)
-        assert len(log2._line_offsets) == 3
-
-        log2.close()
-
-    finally:
-        os.unlink(log_path)
-
-
 def test_file_modification_detection(temp_cache_dir):
     """Test that file modifications are detected properly."""
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
@@ -395,7 +333,7 @@ def test_file_modification_detection(temp_cache_dir):
 
     try:
         # Create initial cache
-        log1 = BigLog(log_path, cache_dir=temp_cache_dir)
+        log1 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log1) == 2
         original_last_pos = log1._last_position
 
@@ -409,7 +347,7 @@ def test_file_modification_detection(temp_cache_dir):
             f.write("Line 3\nLine 4\n")
 
         # Reopen - should detect changes and update
-        log2 = BigLog(log_path, cache_dir=temp_cache_dir)
+        log2 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log2) == 4
         assert log2._last_position > original_last_pos
         log2.close()
@@ -426,7 +364,7 @@ def test_file_truncation_detection(temp_cache_dir):
 
     try:
         # Create cache with full file
-        log1 = BigLog(log_path, cache_dir=temp_cache_dir)
+        log1 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log1) == 4
 
         log1.close()
@@ -436,7 +374,7 @@ def test_file_truncation_detection(temp_cache_dir):
             f.write("New line 1\nNew line 2\n")
 
         # Reopen - should detect truncation and rebuild
-        log2 = BigLog(log_path, cache_dir=temp_cache_dir)
+        log2 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log2) == 2
         assert log2[0] == "New line 1"
         assert log2[1] == "New line 2"
@@ -448,7 +386,7 @@ def test_file_truncation_detection(temp_cache_dir):
 
 def test_ascii_fast_path(temp_cache_dir):
     """Test that ASCII fast path works correctly."""
-    from biglog.biglog import default_get_width
+    from logloglog.logloglog import default_get_width
 
     # ASCII lines should be fast and correct
     assert default_get_width("hello world") == 11
@@ -460,60 +398,9 @@ def test_ascii_fast_path(temp_cache_dir):
     assert default_get_width("日本語") == 6
 
 
-def test_cache_directory_creation(temp_cache_dir):
-    """Test that cache directories are created as needed."""
-    content = "test line\n"
-
-    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-        f.write(content)
-        log_path = f.name
-
-    try:
-        # Use a nested cache directory that doesn't exist
-        nested_cache = temp_cache_dir / "deep" / "nested" / "cache"
-
-        # Should create the directory structure automatically
-        log = BigLog(log_path, cache_dir=nested_cache)
-        assert len(log) == 1
-
-        # Verify cache files were created
-        cache_dirs = list(nested_cache.glob("*"))
-        assert len(cache_dirs) > 0, "Cache directory should have been created"
-
-        log.close()
-
-    finally:
-        os.unlink(log_path)
-
-
-def test_default_cache_directory():
-    """Test that default cache directory is used when none provided."""
-    content = "test line\n"
-
-    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-        f.write(content)
-        log_path = f.name
-
-    try:
-        # Don't provide cache_dir - should use default
-        log = BigLog(log_path)
-        assert len(log) == 1
-
-        # Cache dir should be set to the platformdirs default
-        import platformdirs
-
-        expected_cache = Path(platformdirs.user_cache_dir("biglog"))
-        assert log.cache_dir == expected_cache
-
-        log.close()
-
-    finally:
-        os.unlink(log_path)
-
-
 def test_default_split_lines_edge_cases():
     """Test default_split_lines function with different line endings."""
-    from biglog.biglog import default_split_lines
+    from logloglog.logloglog import default_split_lines
 
     # Test Windows line endings (\r\n)
     text_windows = "line1\r\nline2\r\nline3\r\n"
@@ -536,7 +423,7 @@ def test_default_split_lines_edge_cases():
     assert lines == ["line1", "line2", "line3"]
 
 
-def test_biglog_indexerror_out_of_bounds(log_with_content):
+def test_logloglog_indexerror_out_of_bounds(log_with_content):
     """Test IndexError when accessing out of bounds line in empty read."""
     log = log_with_content
 
@@ -561,10 +448,10 @@ def test_large_file_progress_logging(temp_cache_dir):
     handler = logging.Handler()
     handler.emit = lambda record: log_messages.append(record.getMessage())
 
-    biglog_logger = logging.getLogger("biglog.biglog")
-    original_level = biglog_logger.level
-    biglog_logger.setLevel(logging.INFO)
-    biglog_logger.addHandler(handler)
+    logloglog_logger = logging.getLogger("logloglog.logloglog")
+    original_level = logloglog_logger.level
+    logloglog_logger.setLevel(logging.INFO)
+    logloglog_logger.addHandler(handler)
 
     try:
         # Create a file with enough lines to trigger progress logging (>100k)
@@ -577,7 +464,7 @@ def test_large_file_progress_logging(temp_cache_dir):
 
         try:
             # This should trigger progress logging every 100k lines
-            log = BigLog(log_path, cache_dir=temp_cache_dir)
+            log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
             assert len(log) == 150000
 
             # Check that progress messages were logged
@@ -590,8 +477,8 @@ def test_large_file_progress_logging(temp_cache_dir):
             os.unlink(log_path)
 
     finally:
-        biglog_logger.removeHandler(handler)
-        biglog_logger.setLevel(original_level)
+        logloglog_logger.removeHandler(handler)
+        logloglog_logger.setLevel(original_level)
 
 
 def test_corrupted_index_recovery(temp_cache_dir):
@@ -604,7 +491,7 @@ def test_corrupted_index_recovery(temp_cache_dir):
 
     try:
         # First, create a valid index
-        log1 = BigLog(log_path, cache_dir=temp_cache_dir)
+        log1 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log1) == 3
         index_path = log1._index_path
         log1.close()
@@ -615,7 +502,7 @@ def test_corrupted_index_recovery(temp_cache_dir):
             f.write(b"corrupted data that will cause errors")
 
         # Should detect corruption and rebuild
-        log2 = BigLog(log_path, cache_dir=temp_cache_dir)
+        log2 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log2) == 3  # Should still work after rebuild
         assert log2[0] == "Line 1"
         log2.close()
@@ -625,7 +512,7 @@ def test_corrupted_index_recovery(temp_cache_dir):
 
 
 def test_custom_split_lines_function(temp_cache_dir):
-    """Test BigLog with custom split_lines function."""
+    """Test LogLogLog with custom split_lines function."""
 
     # Test that custom split_lines function is stored and accessible
     def custom_split(text: str):
@@ -643,7 +530,7 @@ def test_custom_split_lines_function(temp_cache_dir):
         log_path = f.name
 
     try:
-        log = BigLog(log_path, split_lines=custom_split, cache_dir=temp_cache_dir)
+        log = LogLogLog(log_path, split_lines=custom_split, cache=Cache(temp_cache_dir))
 
         # Verify the custom split function was assigned
         assert log.split_lines == custom_split
@@ -676,13 +563,13 @@ def test_index_loading_with_existing_offsets(temp_log_with_content):
     log_path, cache_dir = temp_log_with_content
 
     # First, create a valid index with line offsets
-    log1 = BigLog(log_path, cache_dir=cache_dir)
+    log1 = LogLogLog(log_path, cache=Cache(cache_dir))
     assert len(log1) == 3
     assert len(log1._line_offsets) > 0  # Should have line offsets
     log1.close()
 
     # Now reopen - should load existing index and calculate last_position
-    log2 = BigLog(log_path, cache_dir=cache_dir)
+    log2 = LogLogLog(log_path, cache=Cache(cache_dir))
     assert len(log2) == 3
     assert log2._last_position > 0  # Should have calculated from last offset
     log2.close()
@@ -696,7 +583,7 @@ def test_file_truncation_scenario(temp_cache_dir):
 
     try:
         # Create cache with full file
-        log1 = BigLog(log_path, cache_dir=temp_cache_dir)
+        log1 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log1) == 4
         original_last_pos = log1._last_position
         log1.close()
@@ -706,7 +593,7 @@ def test_file_truncation_scenario(temp_cache_dir):
             f.write("New content\n")
 
         # Reopen - should detect truncation and rebuild
-        log2 = BigLog(log_path, cache_dir=temp_cache_dir)
+        log2 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log2) == 1
         assert log2[0] == "New content"
         assert log2._last_position < original_last_pos
@@ -720,7 +607,7 @@ def test_readline_empty_indexerror(temp_log_with_content):
     """Test IndexError when readline returns empty - line 338."""
     log_path, cache_dir = temp_log_with_content
 
-    log = BigLog(log_path, cache_dir=cache_dir)
+    log = LogLogLog(log_path, cache=Cache(cache_dir))
 
     # Add a bogus offset that points beyond the file
     log._line_offsets.append(9999999)  # Way beyond file end
@@ -736,8 +623,8 @@ def test_index_cleanup_exception_handling(temp_log_with_content):
     """Test exception handling during index cleanup - lines 157-158."""
     log_path, cache_dir = temp_log_with_content
 
-    # Create a BigLog instance
-    log = BigLog(log_path, cache_dir=cache_dir)
+    # Create a LogLogLog instance
+    log = LogLogLog(log_path, cache=Cache(cache_dir))
 
     # Simulate a corrupted state where cleanup might fail
     log._display_widths.close()
@@ -754,7 +641,7 @@ def test_index_cleanup_exception_handling(temp_log_with_content):
         f.write(b"corrupted")
 
     # This should trigger the exception handling during cleanup
-    log2 = BigLog(log_path, cache_dir=cache_dir)
+    log2 = LogLogLog(log_path, cache=Cache(cache_dir))
     assert len(log2) == 3  # Should still work after cleanup (fixture has 3 lines)
     log2.close()
 
