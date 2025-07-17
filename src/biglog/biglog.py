@@ -10,7 +10,7 @@ from wcwidth import wcswidth
 import platformdirs
 
 from .logview import LogView
-from .index import IndexMetadata, DisplayWidths
+from .index import DisplayWidths
 from .wraptree import WrapTree
 from .array import Array
 
@@ -73,7 +73,6 @@ class BigLog(LogView):
 
         # Initialize index components
         self._index_path = self._get_index_path()
-        self._metadata = IndexMetadata(self._index_path)
         self._display_widths = DisplayWidths(self._index_path)
         self._wraptree = WrapTree(self._index_path, self._display_widths)
 

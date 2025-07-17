@@ -1,46 +1,7 @@
 """Index data structures for BigLog."""
 
-import os
 from pathlib import Path
-import json
 from .array import Array
-
-
-class IndexMetadata:
-    """Metadata for the index files."""
-
-    def __init__(self, path: Path):
-        self.path = path
-        self.metadata_file = path / "metadata.json"
-
-    def load(self) -> dict:
-        """Load metadata from disk."""
-        if self.metadata_file.exists():
-            with open(self.metadata_file, "r") as f:
-                return json.load(f)
-        return {}
-
-    def save(self, metadata: dict):
-        """Save metadata to disk."""
-        self.path.mkdir(parents=True, exist_ok=True)
-        with open(self.metadata_file, "w") as f:
-            json.dump(metadata, f, indent=2)
-
-    def validate(self, file_stat: os.stat_result) -> bool:
-        """Check if index is valid for given file stats."""
-        metadata = self.load()
-        if not metadata:
-            return False
-
-        # Check if creation time matches (indicates file rotation)
-        if "ctime" in metadata and metadata["ctime"] != file_stat.st_ctime:
-            return False
-
-        # Check if file got smaller (indicates truncation)
-        if "size" in metadata and metadata["size"] > file_stat.st_size:
-            return False
-
-        return True
 
 
 class DisplayWidths:

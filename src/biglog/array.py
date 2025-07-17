@@ -23,32 +23,24 @@ class Array:
         self._capacity = 0
         self._capacity_bytes = 0  # Initialize _capacity_bytes here
 
-        try:
-            if "w" in mode or not os.path.exists(filename):
-                # Create or truncate file
-                self._file = open(filename, "w+b")
-                self._len = 0
-                self._allocate_capacity(initial_elements)
-            else:
-                # Open existing file
-                self._file = open(filename, mode)
-                current_file_size = os.fstat(self._file.fileno()).st_size
-                self._len = current_file_size // self._element_size  # Actual number of elements
+        if "w" in mode or not os.path.exists(filename):
+            # Create or truncate file
+            self._file = open(filename, "w+b")
+            self._len = 0
+            self._allocate_capacity(initial_elements)
+        else:
+            # Open existing file
+            self._file = open(filename, mode)
+            current_file_size = os.fstat(self._file.fileno()).st_size
+            self._len = current_file_size // self._element_size  # Actual number of elements
 
-                # Calculate capacity based on current file size and ensure chunk alignment
-                min_elements = (current_file_size + self._element_size - 1) // self._element_size
-                self._allocate_capacity(min_elements)
+            # Calculate capacity based on current file size and ensure chunk alignment
+            min_elements = (current_file_size + self._element_size - 1) // self._element_size
+            self._allocate_capacity(min_elements)
 
-            # Only mmap if the file has a non-zero size
-            if self._capacity_bytes > 0 or (self._file and os.fstat(self._file.fileno()).st_size > 0):
-                self._mmap = mmap.mmap(self._file.fileno(), 0)
-
-        except Exception as e:
-            if self._mmap:
-                self._mmap.close()
-            if self._file:
-                self._file.close()
-            raise RuntimeError(f"Failed to initialize Array: {e}")
+        # Only mmap if the file has a non-zero size
+        if self._capacity_bytes > 0:
+            self._mmap = mmap.mmap(self._file.fileno(), 0)
 
     def __len__(self):
         return self._len
@@ -97,7 +89,7 @@ class Array:
             raise TypeError(f"Value {value} cannot be packed as {self._dtype_format}: {e}")
 
         if not self._mmap:
-            # This case happens when opening an empty existing file - need to allocate capacity first
+            # This happens when initial_elements=0 and we're appending first element
             self._allocate_capacity(1)
             self._mmap = mmap.mmap(self._file.fileno(), 0)
 

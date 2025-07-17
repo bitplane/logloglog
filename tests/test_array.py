@@ -132,17 +132,22 @@ def test_append_type_error(temp_filepath):
     array.close()
 
 
-def test_append_empty_file_no_mmap(temp_filepath):
-    # Create an empty file
-    with open(temp_filepath, "w") as f:
-        assert f.writable()  # Assert file is writable
+def test_append_empty_file_triggers_mmap_creation(temp_filepath):
+    # Test the case where initial_elements=0, triggering lines 93-94 in append()
+    array = Array("i", temp_filepath, "w+b", initial_elements=0)
 
-    array = Array("i", temp_filepath, "r+b")
-    assert array._mmap is None  # Should be None for an empty file initially
-    array.append(10)
+    # Should have no mmap initially due to 0 capacity
+    assert array._mmap is None
+    assert array._capacity_bytes == 0
+
+    # This append should trigger lines 93-94 (allocate capacity + create mmap)
+    array.append(42)
+
+    # Now should have mmap and data
+    assert array._mmap is not None
     assert len(array) == 1
-    assert array[0] == 10
-    assert array._mmap is not None  # mmap should be created after first append
+    assert array[0] == 42
+
     array.close()
 
 
@@ -210,6 +215,14 @@ def test_setitem_type_error(temp_filepath):
     with pytest.raises(TypeError, match="cannot be packed"):
         array[0] = "not an int"
     array.close()
+
+
+def test_setitem_no_mmap_after_close(temp_filepath):
+    array = Array("i", temp_filepath, "w+b")
+    array.append(10)
+    array.close()
+    with pytest.raises(RuntimeError, match="Array is not memory-mapped"):
+        array[0] = 20
 
 
 def test_flush(temp_filepath):
@@ -398,3 +411,16 @@ def test_imul_zero(temp_filepath):
     # Verify file is truncated to 0 bytes
     assert os.path.getsize(temp_filepath) == 0
     array.close()
+
+
+def test_iadd_not_implemented():
+    """Test __iadd__ with non-iterable - line 142."""
+    array = Array("i", None, "w+b")  # Use temp file
+
+    try:
+        # Test with non-iterable value
+        result = array.__iadd__(42)  # Number is not iterable
+        assert result is NotImplemented
+
+    finally:
+        array.close()
