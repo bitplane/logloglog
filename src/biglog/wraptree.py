@@ -1,11 +1,11 @@
 """Array-based WrapTree implementation for efficient seeking."""
 
-import array
 import logging
 import time
 from pathlib import Path
 from typing import Tuple
 from .index import DisplayWidths
+from .array import Array
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -48,7 +48,6 @@ class WrapTree:
         self.path = path / "wraptree.dat"
         self.display_widths = display_widths
         self._data = None
-        self._file = None
 
     def open(self, create: bool = False):
         """Open the wrap tree file."""
@@ -64,20 +63,13 @@ class WrapTree:
 
     def _load_existing(self):
         """Load existing array data from file."""
-        with open(self.path, "rb") as f:
-            data = f.read()
-
-        if len(data) == 0:
-            self._create_new()
-            return
-
-        # Load as uint32 array
-        self._data = array.array("I")
-        self._data.frombytes(data)
+        # Open as memory-mapped array
+        self._data = Array("I", str(self.path), "r+b")  # uint32
 
         # Validate header
         if len(self._data) < HEADER_SIZE or self._data[MAGIC] != BIGL_MAGIC:
             # Invalid file, recreate
+            self._data.close()
             self._create_new()
             return
 
@@ -87,51 +79,35 @@ class WrapTree:
 
     def _create_new(self):
         """Create new array with header and empty root node."""
-        self._data = array.array("I")
+        # Create new memory-mapped array with initial capacity
+        self._data = Array("I", str(self.path), "w+b", PREALLOC_SIZE)
 
         # Initialize header
-        header = [0] * HEADER_SIZE
-        header[MAGIC] = BIGL_MAGIC
-        header[VERSION] = CURRENT_VERSION
-        header[ROOT_INDEX] = ROOT_NODE_START
-        header[REAL_LENGTH] = HEADER_SIZE + NODE_BUCKETS_START  # Header + empty root
-
-        self._data.extend(header)
+        self._data.append(BIGL_MAGIC)  # MAGIC
+        self._data.append(CURRENT_VERSION)  # VERSION
+        self._data.append(0)  # INODE
+        self._data.append(0)  # CTIME
+        self._data.append(ROOT_NODE_START)  # ROOT_INDEX
+        self._data.append(HEADER_SIZE + NODE_BUCKETS_START)  # REAL_LENGTH
+        self._data.append(0)  # RESERVED_6
+        self._data.append(0)  # RESERVED_7
 
         # Initialize empty root node at index 8
-        root_node = [0] * NODE_BUCKETS_START
-        self._data.extend(root_node)
+        for i in range(NODE_BUCKETS_START):
+            self._data.append(0)
 
-        # Pre-allocate space
-        self._ensure_capacity(PREALLOC_SIZE)
-
-        # Save to disk
-        self._save()
+        # Flush to disk
+        self._data.flush()
 
     def _ensure_capacity(self, min_size: int):
         """Ensure array has at least min_size capacity."""
-        current_size = len(self._data)
-        if current_size >= min_size:
-            return
-
-        # Round up to next PREALLOC_SIZE boundary
-        new_size = ((min_size + PREALLOC_SIZE - 1) // PREALLOC_SIZE) * PREALLOC_SIZE
-        extend_by = new_size - current_size
-
-        if extend_by > 0:
-            self._data.extend([0] * extend_by)
-
-    def _save(self):
-        """Save array data to file."""
-        # Ensure parent directory exists
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "wb") as f:
-            f.write(self._data.tobytes())
+        # The Array class handles capacity automatically on append
+        pass
 
     def close(self):
         """Close the tree and save data."""
         if self._data is not None:
-            self._save()
+            self._data.close()
             self._data = None
 
     def get_node_size(self, node_index: int) -> int:
@@ -215,7 +191,11 @@ class WrapTree:
 
         # Write bucket data: [width1, width2, ...] [count1, count2, ...]
         buckets_start = root_index + NODE_BUCKETS_START
-        self._ensure_capacity(buckets_start + bucket_count * 2)
+
+        # Ensure we have enough space
+        needed_size = buckets_start + bucket_count * 2
+        while len(self._data) < needed_size:
+            self._data.append(0)
 
         # Write widths
         for i, width in enumerate(widths):
@@ -228,6 +208,9 @@ class WrapTree:
         # Update real length
         self._data[REAL_LENGTH] = buckets_start + bucket_count * 2
         logger.debug(f"Array write took {time.time() - write_start:.3f}s")
+
+        # Flush to disk
+        self._data.flush()
 
         total_time = time.time() - start_time
         logger.debug(f"Tree update complete in {total_time:.3f}s (histogram: {hist_time:.3f}s)")
@@ -307,4 +290,4 @@ class WrapTree:
         # TODO: Implement compaction
         # For now, just update version
         self._data[VERSION] = CURRENT_VERSION
-        self._save()
+        self._data.flush()

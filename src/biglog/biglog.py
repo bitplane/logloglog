@@ -3,7 +3,6 @@
 import os
 import time
 import logging
-import array
 from functools import lru_cache
 from pathlib import Path
 from typing import Callable, List, Iterator, Tuple
@@ -13,6 +12,7 @@ import platformdirs
 from .logview import LogView
 from .index import IndexMetadata, DisplayWidths
 from .wraptree import WrapTree
+from .array import Array
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -78,7 +78,6 @@ class BigLog(LogView):
         self._wraptree = WrapTree(self._index_path, self._display_widths)
 
         # Line offset array for O(1) access
-        self._line_offsets = array.array("Q")  # uint64 offsets
         self._line_offsets_path = self._index_path / "line_offsets.dat"
 
         # File tracking
@@ -146,8 +145,8 @@ class BigLog(LogView):
             self._wraptree.open(create=False)
             logger.debug(f"WrapTree open took {time.time() - tree_start:.3f}s")
 
-            # Load line offsets
-            self._load_line_offsets()
+            # Open line offsets array
+            self._line_offsets = Array("Q", str(self._line_offsets_path), "r+b")
         else:
             # Create new index
             logger.info("Creating new index (invalid/missing)")
@@ -157,10 +156,12 @@ class BigLog(LogView):
 
             self._display_widths.open(create=True)
             self._wraptree.open(create=True)
+            # Create new line offsets array
+            self._line_offsets = Array("Q", str(self._line_offsets_path), "w+b")
 
-        # Open log file in text mode for easier handling
+        # Open log file in binary mode for consistent positioning
         file_start = time.time()
-        self._file = open(self.path, "r+", encoding="utf-8", errors="replace")
+        self._file = open(self.path, "r+b")
         logger.debug(f"File open took {time.time() - file_start:.3f}s")
 
         # Update index with any new content
@@ -177,7 +178,6 @@ class BigLog(LogView):
         if self._index_path.exists():
             shutil.rmtree(self._index_path)
         self._last_position = 0
-        self._line_offsets = array.array("Q")  # Reset line offsets
 
     def close(self):
         """Close all resources."""
@@ -186,7 +186,8 @@ class BigLog(LogView):
             self._file = None
         self._display_widths.close()
         self._wraptree.close()
-        self._save_line_offsets()
+        if self._line_offsets:
+            self._line_offsets.close()
 
     def __enter__(self):
         """Context manager entry."""
@@ -214,8 +215,11 @@ class BigLog(LogView):
             self._clear_index()
             self._display_widths.close()
             self._wraptree.close()
+            if self._line_offsets:
+                self._line_offsets.close()
             self._display_widths.open(create=True)
             self._wraptree.open(create=True)
+            self._line_offsets = Array("Q", str(self._line_offsets_path), "w+b")
             # Reset position to start over
             self._last_position = 0
 
@@ -229,7 +233,7 @@ class BigLog(LogView):
 
         while True:
             # Get raw byte position before reading line
-            raw_pos = os.lseek(self._file.fileno(), 0, os.SEEK_CUR)
+            raw_pos = self._file.tell()
             line_data = self._file.readline()
 
             if not line_data:
@@ -238,8 +242,8 @@ class BigLog(LogView):
             # Record line offset for O(1) access
             self._line_offsets.append(raw_pos)
 
-            # Strip newline (CPython already decoded UTF-8)
-            line = line_data.rstrip("\n\r")
+            # Decode and strip newline
+            line = line_data.decode("utf-8", errors="replace").rstrip("\n\r")
 
             # Calculate and store width
             width = self.get_width(line)
@@ -265,10 +269,11 @@ class BigLog(LogView):
             self._wraptree.update_tree(total_lines)
             logger.debug(f"Tree update took {time.time() - tree_start:.3f}s")
 
-            # Save metadata and line offsets
+            # Save metadata
             save_start = time.time()
             self._save_metadata()
-            self._save_line_offsets()
+            if self._line_offsets:
+                self._line_offsets.flush()
             logger.debug(f"Metadata save took {time.time() - save_start:.3f}s")
 
         logger.info(f"Total update time: {time.time() - start_time:.3f}s")
@@ -284,22 +289,6 @@ class BigLog(LogView):
         }
         self._metadata.save(metadata)
 
-    def _load_line_offsets(self):
-        """Load line offsets from disk."""
-        if self._line_offsets_path.exists():
-            with open(self._line_offsets_path, "rb") as f:
-                data = f.read()
-                if data:
-                    self._line_offsets = array.array("Q")
-                    self._line_offsets.frombytes(data)
-
-    def _save_line_offsets(self):
-        """Save line offsets to disk."""
-        if self._line_offsets:
-            self._line_offsets_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._line_offsets_path, "wb") as f:
-                f.write(self._line_offsets.tobytes())
-
     def append(self, line: str):
         """
         Append a line to the log file and update index.
@@ -307,10 +296,10 @@ class BigLog(LogView):
         Args:
             line: Line to append (newline will be added)
         """
-        # Write to file (text mode)
+        # Write to file (binary mode)
         self._file.seek(0, 2)  # Seek to end
-        raw_pos = os.lseek(self._file.fileno(), 0, os.SEEK_CUR)
-        self._file.write(line + "\n")
+        raw_pos = self._file.tell()
+        self._file.write((line + "\n").encode("utf-8"))
         self._file.flush()
 
         # Update our position tracking
@@ -348,7 +337,7 @@ class BigLog(LogView):
         if not line_data:
             raise IndexError(f"Line {line_no} out of range")
 
-        return line_data.rstrip("\n\r")
+        return line_data.decode("utf-8", errors="replace").rstrip("\n\r")
 
     def __len__(self) -> int:
         """Get total number of logical lines."""

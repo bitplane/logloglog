@@ -1,6 +1,7 @@
 import mmap
 import os
 import struct
+import tempfile
 
 
 class Array:
@@ -22,9 +23,14 @@ class Array:
         "d": ("d", 8),  # double
     }
 
-    def __init__(self, filename, dtype, mode="r+b", initial_elements=0):
+    def __init__(self, dtype, filename=None, mode="r+b", initial_elements=0):
         if dtype not in self._DTYPE_MAP:
             raise ValueError(f"Unsupported dtype: {dtype}. Supported types are: {list(self._DTYPE_MAP.keys())}")
+
+        if filename is None:
+            fd, filename = tempfile.mkstemp()
+            os.close(fd)
+            mode = "w+b"  # Always create new temp files
 
         self._filename = filename
         self._dtype = dtype
@@ -35,44 +41,25 @@ class Array:
         self._capacity = 0
         self._capacity_bytes = 0  # Initialize _capacity_bytes here
 
-        print(f"[DBA_INIT] Initializing with dtype={dtype}, element_size={self._element_size}")
-
         try:
             if "w" in mode or not os.path.exists(filename):
                 # Create or truncate file
                 self._file = open(filename, "w+b")
-                bytes_needed = initial_elements * self._element_size
-                chunks_needed = (bytes_needed + self.CHUNK_SIZE_BYTES - 1) // self.CHUNK_SIZE_BYTES
-                self._capacity_bytes = chunks_needed * self.CHUNK_SIZE_BYTES
-                self._capacity = self._capacity_bytes // self._element_size
-                self._file.truncate(self._capacity_bytes)
                 self._len = 0
-                print(
-                    f"[DBA_INIT] New file. initial_elements={initial_elements}, capacity={self._capacity}, capacity_bytes={self._capacity_bytes}"
-                )
+                self._allocate_capacity(initial_elements)
             else:
                 # Open existing file
                 self._file = open(filename, mode)
                 current_file_size = os.fstat(self._file.fileno()).st_size
                 self._len = current_file_size // self._element_size  # Actual number of elements
 
-                # Calculate capacity based on current file size, rounded up to nearest chunk
-                chunks_needed = (current_file_size + self.CHUNK_SIZE_BYTES - 1) // self.CHUNK_SIZE_BYTES
-                self._capacity_bytes = chunks_needed * self.CHUNK_SIZE_BYTES
-                self._capacity = self._capacity_bytes // self._element_size
-
-                # If the file size is not already a multiple of the chunk size, truncate it to align.
-                # This ensures consistency for mmap and future appends.
-                if current_file_size < self._capacity_bytes:
-                    self._file.truncate(self._capacity_bytes)
-                print(
-                    f"[DBA_INIT] Existing file. len={self._len}, capacity={self._capacity}, capacity_bytes={self._capacity_bytes}"
-                )
+                # Calculate capacity based on current file size and ensure chunk alignment
+                min_elements = (current_file_size + self._element_size - 1) // self._element_size
+                self._allocate_capacity(min_elements)
 
             # Only mmap if the file has a non-zero size
             if self._capacity_bytes > 0 or (self._file and os.fstat(self._file.fileno()).st_size > 0):
                 self._mmap = mmap.mmap(self._file.fileno(), 0)
-                print(f"[DBA_INIT] mmap created with size {self._mmap.size()}")
 
         except Exception as e:
             if self._mmap:
@@ -83,6 +70,11 @@ class Array:
 
     def __len__(self):
         return self._len
+
+    def __iter__(self):
+        current_len = self._len
+        for i in range(current_len):
+            yield self[i]
 
     def __getitem__(self, index):
         if not isinstance(index, int):
@@ -113,45 +105,78 @@ class Array:
         self._mmap[offset : offset + self._element_size] = packed_value
 
     def append(self, value):
-        print(f"[DBA_APPEND] Appending value={value}, current_len={self._len}, current_capacity={self._capacity}")
         if self._len == self._capacity:
-            # Need to resize
-            if self._mmap:
-                self._mmap.close()
-
-            # Calculate how many elements fit into one CHUNK_SIZE_BYTES
-            elements_in_chunk = self.CHUNK_SIZE_BYTES // self._element_size
-            if elements_in_chunk == 0:  # Should not happen with current CHUNK_SIZE_BYTES and element_sizes
-                elements_in_chunk = 1  # Fallback: add at least one element
-
-            new_capacity = self._capacity + elements_in_chunk
-            new_capacity_bytes = new_capacity * self._element_size
-
-            print(
-                f"[DBA_APPEND] Resizing: old_capacity={self._capacity}, new_capacity={new_capacity}, new_capacity_bytes={new_capacity_bytes}"
-            )
-
-            self._file.truncate(new_capacity_bytes)
-            self._mmap = mmap.mmap(self._file.fileno(), 0)
-            self._capacity = new_capacity
-            self._capacity_bytes = new_capacity_bytes  # Update _capacity_bytes after resize
-            print(f"[DBA_APPEND] Resized. New mmap size: {self._mmap.size()}")
+            self._resize(self._len + 1)
 
         offset = self._len * self._element_size
         try:
             packed_value = struct.pack(self._dtype_format, value)
-            print(f"[DBA_APPEND] Packed value size: {len(packed_value)}")
         except struct.error as e:
             raise TypeError(f"Value {value} cannot be packed as {self._dtype_format}: {e}")
 
         if not self._mmap:
-            # This case should only happen if initial_elements was 0 and this is the very first append
-            # Re-map the file now that it has a non-zero size
+            # This case happens when opening an empty existing file - need to allocate capacity first
+            self._allocate_capacity(1)
             self._mmap = mmap.mmap(self._file.fileno(), 0)
-            print(f"[DBA_APPEND] First append, mmap created with size {self._mmap.size()}")
 
         self._mmap[offset : offset + self._element_size] = packed_value
         self._len += 1
+
+    def _allocate_capacity(self, min_elements):
+        """Allocate capacity for at least min_elements, rounded up to chunk boundary."""
+        bytes_needed = min_elements * self._element_size
+        chunks_needed = (bytes_needed + self.CHUNK_SIZE_BYTES - 1) // self.CHUNK_SIZE_BYTES
+        self._capacity_bytes = chunks_needed * self.CHUNK_SIZE_BYTES
+        self._capacity = self._capacity_bytes // self._element_size
+        self._file.truncate(self._capacity_bytes)
+
+    def _resize(self, min_new_len):
+        if self._mmap:
+            self._mmap.close()
+
+        self._allocate_capacity(min_new_len)
+        self._mmap = mmap.mmap(self._file.fileno(), 0)
+
+    def extend(self, iterable):
+        values = list(iterable)
+        num_new_elements = len(values)
+
+        if self._len + num_new_elements > self._capacity:
+            self._resize(self._len + num_new_elements)
+
+        for value in values:
+            self.append(value)
+
+    def __contains__(self, value):
+        for i in range(self._len):
+            if self[i] == value:
+                return True
+        return False
+
+    def __iadd__(self, other):
+        if hasattr(other, "__iter__"):
+            self.extend(other)
+            return self
+        return NotImplemented
+
+    def __imul__(self, value):
+        if not isinstance(value, int) or value < 0:
+            return NotImplemented
+
+        if value == 0:
+            self._len = 0
+            if self._mmap:
+                self._mmap.close()
+                self._mmap = None
+            if self._file:
+                self._file.truncate(0)
+            self._capacity = 0
+            self._capacity_bytes = 0
+        elif value > 1:
+            original_elements = [self[i] for i in range(len(self))]
+            for _ in range(value - 1):
+                self.extend(original_elements)
+        return self
 
     def flush(self):
         if self._mmap:
@@ -179,9 +204,3 @@ class Array:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
-
-    def __del__(self):
-        # Fallback to close if not explicitly closed, but context manager is preferred
-        # Check if _file is not None and not already closed
-        if hasattr(self, "_file") and self._file and not self._file.closed:
-            self.close()
