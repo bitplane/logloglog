@@ -94,25 +94,7 @@ class BigLog(LogView):
     def _get_index_path(self) -> Path:
         """Get the index directory path based on file identity."""
         stat = os.stat(self.path)
-
-        if os.name == "posix":
-            # Unix: use device and inode
-            index_name = f"{stat.st_dev}_{stat.st_ino}"
-        else:
-            # Windows: use file index
-            import ctypes
-            import ctypes.wintypes
-
-            # Get file handle
-            handle = ctypes.windll.kernel32.CreateFileW(str(self.path), 0x80000000, 0, None, 3, 0x80, None)
-
-            # Get file index
-            file_info = ctypes.wintypes.BY_HANDLE_FILE_INFORMATION()
-            ctypes.windll.kernel32.GetFileInformationByHandle(handle, ctypes.byref(file_info))
-            ctypes.windll.kernel32.CloseHandle(handle)
-
-            index_name = f"{file_info.dwVolumeSerialNumber}_{file_info.nFileIndexHigh}_{file_info.nFileIndexLow}"
-
+        index_name = f"{stat.st_dev}_{stat.st_ino}"
         return self.cache_dir / index_name
 
     def _open(self):

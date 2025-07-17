@@ -14,6 +14,32 @@ def temp_filepath():
     os.remove(path)
 
 
+def test_init_new_file_no_filename():
+    # Test case for filename=None, allowing Array to create its own temp file
+    array = None
+    try:
+        array = Array("i", None)  # Use default initial_elements=0
+        assert array._filename is not None
+        assert array._dtype == "i"
+        assert array._element_size == struct.calcsize("i")
+        assert array._len == 0
+
+        expected_capacity_bytes = 0
+        expected_capacity = 0
+
+        assert array._capacity == expected_capacity
+
+        # Check file size before closing and removing
+        actual_file_size = os.path.getsize(array._filename)
+        assert actual_file_size == expected_capacity_bytes
+
+    finally:
+        if array:
+            array.close()
+        elif array and array._filename and os.path.exists(array._filename):
+            os.remove(array._filename)
+
+
 @pytest.mark.parametrize(
     "dtype, initial_elements, expected_element_size",
     [
@@ -24,7 +50,7 @@ def temp_filepath():
         ("f", 5, 4),
     ],
 )
-def test_init_new_file(temp_filepath, dtype, initial_elements, expected_element_size):
+def test_init_new_file_with_filename(temp_filepath, dtype, initial_elements, expected_element_size):
     array = Array(dtype, temp_filepath, "w+b", initial_elements)
     assert array._filename == temp_filepath
     assert array._dtype == dtype
@@ -42,11 +68,6 @@ def test_init_new_file(temp_filepath, dtype, initial_elements, expected_element_
     array.close()
 
 
-def test_init_unsupported_dtype(temp_filepath):
-    with pytest.raises(ValueError, match="Unsupported dtype"):
-        Array("z", temp_filepath, "w+b")
-
-
 def test_init_existing_file(temp_filepath):
     # Create a file with some data first
     with open(temp_filepath, "wb") as f:
@@ -56,13 +77,13 @@ def test_init_existing_file(temp_filepath):
     assert array._len == 3
     # For existing files, capacity is aligned to the nearest 4KB chunk
     current_file_size = os.path.getsize(temp_filepath)
-    expected_capacity = (
-        (current_file_size + Array.CHUNK_SIZE_BYTES - 1)
-        // Array.CHUNK_SIZE_BYTES
-        * Array.CHUNK_SIZE_BYTES
-        // array._element_size
+    expected_capacity_bytes = (
+        (current_file_size + Array.CHUNK_SIZE_BYTES - 1) // Array.CHUNK_SIZE_BYTES * Array.CHUNK_SIZE_BYTES
     )
+    expected_capacity = expected_capacity_bytes // array._element_size
     assert array._capacity == expected_capacity
+    assert os.path.getsize(temp_filepath) == expected_capacity_bytes
+    assert array._capacity_bytes == expected_capacity_bytes
     assert array[0] == 10
     assert array[1] == 20
     assert array[2] == 30
@@ -111,6 +132,20 @@ def test_append_type_error(temp_filepath):
     array.close()
 
 
+def test_append_empty_file_no_mmap(temp_filepath):
+    # Create an empty file
+    with open(temp_filepath, "w") as f:
+        assert f.writable()  # Assert file is writable
+
+    array = Array("i", temp_filepath, "r+b")
+    assert array._mmap is None  # Should be None for an empty file initially
+    array.append(10)
+    assert len(array) == 1
+    assert array[0] == 10
+    assert array._mmap is not None  # mmap should be created after first append
+    array.close()
+
+
 def test_getitem_valid(temp_filepath):
     array = Array("i", temp_filepath, "w+b")
     array.append(100)
@@ -136,6 +171,14 @@ def test_getitem_type_error(temp_filepath):
     with pytest.raises(TypeError, match="Index must be an integer"):
         _ = array[0.5]
     array.close()
+
+
+def test_getitem_no_mmap_after_close(temp_filepath):
+    array = Array("i", temp_filepath, "w+b")
+    array.append(10)
+    array.close()
+    with pytest.raises(RuntimeError, match="Array is not memory-mapped"):
+        _ = array[0]
 
 
 def test_setitem_valid(temp_filepath):

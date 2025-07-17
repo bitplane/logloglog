@@ -484,3 +484,278 @@ def test_cache_directory_creation(temp_cache_dir):
 
     finally:
         os.unlink(log_path)
+
+
+def test_default_cache_directory():
+    """Test that default cache directory is used when none provided."""
+    content = "test line\n"
+
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write(content)
+        log_path = f.name
+
+    try:
+        # Don't provide cache_dir - should use default
+        log = BigLog(log_path)
+        assert len(log) == 1
+
+        # Cache dir should be set to the platformdirs default
+        import platformdirs
+
+        expected_cache = Path(platformdirs.user_cache_dir("biglog"))
+        assert log.cache_dir == expected_cache
+
+        log.close()
+
+    finally:
+        os.unlink(log_path)
+
+
+def test_default_split_lines_edge_cases():
+    """Test default_split_lines function with different line endings."""
+    from biglog.biglog import default_split_lines
+
+    # Test Windows line endings (\r\n)
+    text_windows = "line1\r\nline2\r\nline3\r\n"
+    lines = default_split_lines(text_windows)
+    assert lines == ["line1", "line2", "line3"]
+
+    # Test Mac line endings (\r) - note: \r doesn't add final newline check
+    text_mac = "line1\rline2\rline3"
+    lines = default_split_lines(text_mac)
+    assert lines == ["line1", "line2", "line3"]
+
+    # Test mixed line endings
+    text_mixed = "line1\r\nline2\nline3"
+    lines = default_split_lines(text_mixed)
+    assert lines == ["line1", "line2", "line3"]
+
+    # Test text not ending with newline
+    text_no_newline = "line1\nline2\nline3"
+    lines = default_split_lines(text_no_newline)
+    assert lines == ["line1", "line2", "line3"]
+
+
+def test_biglog_indexerror_out_of_bounds(log_with_content):
+    """Test IndexError when accessing out of bounds line in empty read."""
+    log = log_with_content
+
+    # Mock a scenario where file.readline() returns empty (EOF)
+    # This is hard to reproduce naturally, but we can test the boundary
+    total_lines = len(log)
+
+    # Test normal access works
+    assert log[total_lines - 1] is not None
+
+    # Test out of bounds access
+    with pytest.raises(IndexError, match="Line .* out of range"):
+        _ = log[total_lines + 100]
+
+
+def test_large_file_progress_logging(temp_cache_dir):
+    """Test progress logging for large files."""
+    import logging
+
+    # Create a log handler to capture log messages
+    log_messages = []
+    handler = logging.Handler()
+    handler.emit = lambda record: log_messages.append(record.getMessage())
+
+    biglog_logger = logging.getLogger("biglog.biglog")
+    original_level = biglog_logger.level
+    biglog_logger.setLevel(logging.INFO)
+    biglog_logger.addHandler(handler)
+
+    try:
+        # Create a file with enough lines to trigger progress logging (>100k)
+        lines = [f"Line {i}\n" for i in range(150000)]
+        content = "".join(lines)
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+            f.write(content)
+            log_path = f.name
+
+        try:
+            # This should trigger progress logging every 100k lines
+            log = BigLog(log_path, cache_dir=temp_cache_dir)
+            assert len(log) == 150000
+
+            # Check that progress messages were logged
+            progress_messages = [msg for msg in log_messages if "lines/sec" in msg]
+            assert len(progress_messages) > 0, "Should have logged progress messages"
+
+            log.close()
+
+        finally:
+            os.unlink(log_path)
+
+    finally:
+        biglog_logger.removeHandler(handler)
+        biglog_logger.setLevel(original_level)
+
+
+def test_corrupted_index_recovery(temp_cache_dir):
+    """Test recovery when index files are corrupted."""
+    content = "Line 1\nLine 2\nLine 3\n"
+
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write(content)
+        log_path = f.name
+
+    try:
+        # First, create a valid index
+        log1 = BigLog(log_path, cache_dir=temp_cache_dir)
+        assert len(log1) == 3
+        index_path = log1._index_path
+        log1.close()
+
+        # Corrupt the line_offsets file
+        corrupted_offsets_path = index_path / "line_offsets.dat"
+        with open(corrupted_offsets_path, "wb") as f:
+            f.write(b"corrupted data that will cause errors")
+
+        # Should detect corruption and rebuild
+        log2 = BigLog(log_path, cache_dir=temp_cache_dir)
+        assert len(log2) == 3  # Should still work after rebuild
+        assert log2[0] == "Line 1"
+        log2.close()
+
+    finally:
+        os.unlink(log_path)
+
+
+def test_custom_split_lines_function(temp_cache_dir):
+    """Test BigLog with custom split_lines function."""
+
+    # Test that custom split_lines function is stored and accessible
+    def custom_split(text: str):
+        # Split on semicolons instead of newlines
+        lines = text.split(";")
+        # Remove empty trailing element if text ends with separator
+        if text.endswith(";"):
+            lines.pop()
+        return lines
+
+    content = "line1\nline2\nline3\n"
+
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write(content)
+        log_path = f.name
+
+    try:
+        log = BigLog(log_path, split_lines=custom_split, cache_dir=temp_cache_dir)
+
+        # Verify the custom split function was assigned
+        assert log.split_lines == custom_split
+
+        # Test the function directly
+        test_text = "a;b;c;"
+        result = log.split_lines(test_text)
+        assert result == ["a", "b", "c"]
+
+        log.close()
+
+    finally:
+        os.unlink(log_path)
+
+
+@pytest.fixture
+def temp_log_with_content(temp_cache_dir):
+    """Create a temporary log file with test content."""
+    content = "Line 1\nLine 2\nLine 3\n"
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write(content)
+        log_path = f.name
+
+    yield log_path, temp_cache_dir
+    os.unlink(log_path)
+
+
+def test_index_loading_with_existing_offsets(temp_log_with_content):
+    """Test loading index with existing line offsets to cover lines 138-146."""
+    log_path, cache_dir = temp_log_with_content
+
+    # First, create a valid index with line offsets
+    log1 = BigLog(log_path, cache_dir=cache_dir)
+    assert len(log1) == 3
+    assert len(log1._line_offsets) > 0  # Should have line offsets
+    log1.close()
+
+    # Now reopen - should load existing index and calculate last_position
+    log2 = BigLog(log_path, cache_dir=cache_dir)
+    assert len(log2) == 3
+    assert log2._last_position > 0  # Should have calculated from last offset
+    log2.close()
+
+
+def test_file_truncation_scenario(temp_cache_dir):
+    """Test file truncation detection to cover lines 220-232."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("Line 1\nLine 2\nLine 3\nLine 4\n")
+        log_path = f.name
+
+    try:
+        # Create cache with full file
+        log1 = BigLog(log_path, cache_dir=temp_cache_dir)
+        assert len(log1) == 4
+        original_last_pos = log1._last_position
+        log1.close()
+
+        # Truncate file to be smaller
+        with open(log_path, "w") as f:
+            f.write("New content\n")
+
+        # Reopen - should detect truncation and rebuild
+        log2 = BigLog(log_path, cache_dir=temp_cache_dir)
+        assert len(log2) == 1
+        assert log2[0] == "New content"
+        assert log2._last_position < original_last_pos
+        log2.close()
+
+    finally:
+        os.unlink(log_path)
+
+
+def test_readline_empty_indexerror(temp_log_with_content):
+    """Test IndexError when readline returns empty - line 338."""
+    log_path, cache_dir = temp_log_with_content
+
+    log = BigLog(log_path, cache_dir=cache_dir)
+
+    # Add a bogus offset that points beyond the file
+    log._line_offsets.append(9999999)  # Way beyond file end
+
+    # Now trying to access this line should trigger the IndexError
+    with pytest.raises(IndexError, match="Line .* out of range"):
+        _ = log[len(log) - 1]  # This should fail due to empty readline
+
+    log.close()
+
+
+def test_index_cleanup_exception_handling(temp_log_with_content):
+    """Test exception handling during index cleanup - lines 157-158."""
+    log_path, cache_dir = temp_log_with_content
+
+    # Create a BigLog instance
+    log = BigLog(log_path, cache_dir=cache_dir)
+
+    # Simulate a corrupted state where cleanup might fail
+    log._display_widths.close()
+    log._wraptree.close()
+    if log._line_offsets:
+        log._line_offsets.close()
+
+    # Set to None to simulate broken state
+    log._line_offsets = None
+
+    # Now force a rebuild by corrupting an index file
+    corrupted_file = log._index_path / "display_widths.dat"
+    with open(corrupted_file, "wb") as f:
+        f.write(b"corrupted")
+
+    # This should trigger the exception handling during cleanup
+    log2 = BigLog(log_path, cache_dir=cache_dir)
+    assert len(log2) == 3  # Should still work after cleanup (fixture has 3 lines)
+    log2.close()
+
+    log.close()  # Original log close

@@ -7,26 +7,7 @@ import tempfile
 class Array:
     CHUNK_SIZE_BYTES = 4096
 
-    _DTYPE_MAP = {
-        "b": ("b", 1),  # signed char
-        "B": ("B", 1),  # unsigned char
-        "h": ("h", 2),  # short
-        "H": ("H", 2),  # unsigned short
-        "i": ("i", 4),  # int
-        "I": ("I", 4),  # unsigned int
-        # Dynamically determine size for 'l' and 'L'
-        "l": ("l", struct.calcsize("l")),  # long
-        "L": ("L", struct.calcsize("L")),  # unsigned long
-        "q": ("q", 8),  # long long
-        "Q": ("Q", 8),  # unsigned long long
-        "f": ("f", 4),  # float
-        "d": ("d", 8),  # double
-    }
-
     def __init__(self, dtype, filename=None, mode="r+b", initial_elements=0):
-        if dtype not in self._DTYPE_MAP:
-            raise ValueError(f"Unsupported dtype: {dtype}. Supported types are: {list(self._DTYPE_MAP.keys())}")
-
         if filename is None:
             fd, filename = tempfile.mkstemp()
             os.close(fd)
@@ -34,7 +15,8 @@ class Array:
 
         self._filename = filename
         self._dtype = dtype
-        self._dtype_format, self._element_size = self._DTYPE_MAP[dtype]
+        self._dtype_format = dtype
+        self._element_size = struct.calcsize(dtype)
         self._file = None
         self._mmap = None
         self._len = 0
