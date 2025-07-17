@@ -40,6 +40,9 @@ dev = [
     "twine",
     "ruff"
 ]
+textual = [
+    "textual"
+]
 
 [build-system]
 build-backend = "flit_core.buildapi"

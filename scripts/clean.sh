@@ -9,5 +9,6 @@ find . -name '*.egg-info' -exec rm -rv {} \;        2>/dev/null
 find . -name '.pytest_cache' -exec rm -rv {} \;     2>/dev/null
 rm ./dist -r                                        2>/dev/null
 rm -r ~/.cache/biglog                               2>/dev/null
+scripts/log_log_log.sh -k                           2>/dev/null
 
 echo Cleaned project

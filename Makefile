@@ -1,5 +1,5 @@
 # the things that don't have output files or run every time
-.PHONY: help all install test dev coverage clean \
+.PHONY: help all install test dev coverage clean log-stop \
 		pre-commit update-pre-commit
 
 
@@ -22,6 +22,14 @@ docs: .docs/index.html ## build the documentation
 
 clean:  ## delete caches and the venv
 	scripts/clean.sh
+
+.log.pid:  scripts/log_log_log.sh ## create log.log.log from system logs
+	scripts/log_log_log.sh
+
+log: .log.pid  ## create log.log.log from system logs
+
+log-stop:  ## stop the live log tail process
+	scripts/log_log_log.sh -k
 
 pre-commit: .git/hooks/pre-commit  ## install pre-commit into the git repo
 
