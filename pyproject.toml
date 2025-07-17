@@ -24,8 +24,7 @@ classifiers = [
 
 dependencies = [
     "wcwidth>=0.2.5",
-    "platformdirs>=3.0",
-    "numpy>=1.20.0",
+    "platformdirs>=3.0"
 ]
 
 [project.optional-dependencies]
@@ -40,7 +39,8 @@ dev = [
     "ruff"
 ]
 textual = [
-    "textual"
+    "textual",
+    "textual-window"
 ]
 
 [build-system]

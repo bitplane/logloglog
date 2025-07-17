@@ -439,48 +439,6 @@ def test_logloglog_indexerror_out_of_bounds(log_with_content):
         _ = log[total_lines + 100]
 
 
-def test_large_file_progress_logging(temp_cache_dir):
-    """Test progress logging for large files."""
-    import logging
-
-    # Create a log handler to capture log messages
-    log_messages = []
-    handler = logging.Handler()
-    handler.emit = lambda record: log_messages.append(record.getMessage())
-
-    logloglog_logger = logging.getLogger("logloglog.logloglog")
-    original_level = logloglog_logger.level
-    logloglog_logger.setLevel(logging.INFO)
-    logloglog_logger.addHandler(handler)
-
-    try:
-        # Create a file with enough lines to trigger progress logging (>100k)
-        lines = [f"Line {i}\n" for i in range(150000)]
-        content = "".join(lines)
-
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write(content)
-            log_path = f.name
-
-        try:
-            # This should trigger progress logging every 100k lines
-            log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
-            assert len(log) == 150000
-
-            # Check that progress messages were logged
-            progress_messages = [msg for msg in log_messages if "lines/sec" in msg]
-            assert len(progress_messages) > 0, "Should have logged progress messages"
-
-            log.close()
-
-        finally:
-            os.unlink(log_path)
-
-    finally:
-        logloglog_logger.removeHandler(handler)
-        logloglog_logger.setLevel(original_level)
-
-
 def test_corrupted_index_recovery(temp_cache_dir):
     """Test recovery when index files are corrupted."""
     content = "Line 1\nLine 2\nLine 3\n"

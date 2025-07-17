@@ -2,6 +2,7 @@ import mmap
 import os
 import struct
 import tempfile
+import weakref
 
 
 class Array:
@@ -41,6 +42,9 @@ class Array:
         # Only mmap if the file has a non-zero size
         if self._capacity_bytes > 0:
             self._mmap = mmap.mmap(self._file.fileno(), 0)
+            
+        # Set up finalizer to ensure cleanup even if close() isn't called
+        self._finalizer = weakref.finalize(self, self.close)
 
     def __len__(self):
         return self._len
@@ -53,6 +57,11 @@ class Array:
     def __getitem__(self, index):
         if not isinstance(index, int):
             raise TypeError("Index must be an integer")
+
+        # Handle negative indices
+        if index < 0:
+            index = self._len + index
+
         if not (0 <= index < self._len):
             raise IndexError("Index out of bounds")
         if not self._mmap:
@@ -65,6 +74,11 @@ class Array:
     def __setitem__(self, index, value):
         if not isinstance(index, int):
             raise TypeError("Index must be an integer")
+
+        # Handle negative indices
+        if index < 0:
+            index = self._len + index
+
         if not (0 <= index < self._len):
             raise IndexError("Index out of bounds")
         if not self._mmap:

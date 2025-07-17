@@ -38,8 +38,8 @@ class Cache:
         """
         # Get file stats for unique identification
         stat = os.stat(path)
-        # Create hash from device, inode, and ctime
-        hash_input = f"{stat.st_dev}_{stat.st_ino}_{stat.st_ctime}"
+        # Create hash from device and inode only (removed ctime for stability)
+        hash_input = f"{stat.st_dev}_{stat.st_ino}"
         hash_digest = hashlib.md5(hash_input.encode()).hexdigest()[:8]
 
         # Create cache directory name

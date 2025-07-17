@@ -166,7 +166,7 @@ def test_getitem_out_of_bounds(temp_filepath):
     with pytest.raises(IndexError, match="Index out of bounds"):
         _ = array[1]
     with pytest.raises(IndexError, match="Index out of bounds"):
-        _ = array[-1]
+        _ = array[-2]  # -2 is out of bounds for 1-element array
     array.close()
 
 
@@ -203,7 +203,7 @@ def test_setitem_out_of_bounds(temp_filepath):
     with pytest.raises(IndexError, match="Index out of bounds"):
         array[1] = 20
     with pytest.raises(IndexError, match="Index out of bounds"):
-        array[-1] = 5
+        array[-2] = 5  # -2 is out of bounds for 1-element array
     array.close()
 
 
@@ -424,3 +424,67 @@ def test_iadd_not_implemented():
 
     finally:
         array.close()
+
+
+def test_negative_index_access(temp_filepath):
+    """Test that negative indices work correctly in Array."""
+    array = Array("i", temp_filepath, "w+b")
+    array.append(10)
+    array.append(20)
+    array.append(30)
+
+    # Test positive indices work
+    assert array[0] == 10
+    assert array[1] == 20
+    assert array[2] == 30
+
+    # Test negative indices (this should work but currently fails)
+    assert array[-1] == 30  # Should be last element
+    assert array[-2] == 20  # Should be second-to-last element
+    assert array[-3] == 10  # Should be first element
+
+    array.close()
+
+
+def test_negative_index_out_of_bounds(temp_filepath):
+    """Test that negative indices properly check bounds."""
+    array = Array("i", temp_filepath, "w+b")
+    array.append(10)
+    array.append(20)
+
+    # These should raise IndexError
+    with pytest.raises(IndexError, match="Index out of bounds"):
+        _ = array[-3]  # Only 2 elements, so -3 is out of bounds
+
+    with pytest.raises(IndexError, match="Index out of bounds"):
+        _ = array[-10]  # Way out of bounds
+
+    array.close()
+
+
+def test_array_length_after_reopen_with_preallocation(temp_filepath):
+    """Test that Array length is correct after reopening a file with pre-allocated space."""
+    # Create array with initial capacity but only add a few elements
+    array = Array("i", temp_filepath, "w+b", initial_elements=1000)  # Pre-allocate space for 1000 elements
+    array.append(10)
+    array.append(20)
+    array.append(30)
+    
+    # Verify length is correct
+    assert len(array) == 3
+    assert array[0] == 10
+    assert array[1] == 20 
+    assert array[2] == 30
+    assert array[-1] == 30  # Last element should be 30
+    
+    array.close()
+    
+    # Reopen the array - it should remember the correct length
+    array2 = Array("i", temp_filepath, "r+b")
+    assert len(array2) == 3
+    assert array2[0] == 10
+    assert array2[1] == 20
+    assert array2[2] == 30
+    assert array2[-1] == 30  # Last element should still be 30, not 0
+    
+    array2.close()

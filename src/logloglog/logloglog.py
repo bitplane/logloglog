@@ -76,6 +76,7 @@ class LogLogLog(LogView):
 
         # Line offset array for O(1) access
         self._line_offsets_path = self._index_path / "line_offsets.dat"
+        self._file_size_path = self._index_path / "file_size.dat"
 
         # File tracking
         self._file = None
@@ -104,10 +105,15 @@ class LogLogLog(LogView):
 
         # Check if index exists and is valid
         validate_start = time.time()
-        index_exists = (
-            self._line_offsets_path.exists()
-            and (self._index_path / "display_widths.dat").exists()
-            and (self._index_path / "wraptree.dat").exists()
+        line_offsets_exists = self._line_offsets_path.exists()
+        display_widths_exists = (self._index_path / "display_widths.dat").exists()
+        wraptree_exists = (self._index_path / "wraptree.dat").exists()
+        file_size_exists = self._file_size_path.exists()
+
+        index_exists = line_offsets_exists and display_widths_exists and wraptree_exists and file_size_exists
+
+        logger.debug(
+            f"Index file check - line_offsets: {line_offsets_exists}, display_widths: {display_widths_exists}, wraptree: {wraptree_exists}, file_size: {file_size_exists}"
         )
 
         # Open log file early so we can use it for validation
@@ -132,12 +138,22 @@ class LogLogLog(LogView):
                     logger.debug(f"Calculated last_position: {self._last_position:,} from offset {last_offset:,}")
                 else:
                     self._last_position = 0
+                    logger.debug("Empty line_offsets array, setting last_position to 0")
 
                 logger.debug(f"Index load took {time.time() - load_start:.3f}s - last_pos: {self._last_position:,}")
                 logger.debug(f"Loaded {len(self._line_offsets):,} line offsets, {len(self._display_widths):,} widths")
 
+                # Check if file size has changed (shrunk = truncated)
+                cached_file_size = self._load_file_size()
+                current_file_size = self._file_stat.st_size
+                if cached_file_size is not None and current_file_size < cached_file_size:
+                    logger.info(
+                        f"File shrunk from {cached_file_size:,} to {current_file_size:,} bytes - invalidating cache"
+                    )
+                    raise Exception("File truncated")
+
             except Exception as e:
-                logger.warning(f"Failed to load existing index: {e}, rebuilding")
+                logger.exception(f"Failed to load existing index: {e}, rebuilding")
                 index_exists = False
                 # Close any partially opened components
                 try:
@@ -169,6 +185,19 @@ class LogLogLog(LogView):
         logger.info(f"Update took {time.time() - update_start:.3f}s")
 
         logger.info(f"Total open time: {time.time() - start_time:.3f}s")
+
+    def _save_file_size(self, file_size):
+        """Save the file size to cache metadata."""
+        with open(self._file_size_path, "w") as f:
+            f.write(str(file_size))
+
+    def _load_file_size(self):
+        """Load the cached file size, returns None if not found."""
+        try:
+            with open(self._file_size_path, "r") as f:
+                return int(f.read().strip())
+        except (FileNotFoundError, ValueError):
+            return None
 
     def _clear_index(self):
         """Clear the index directory."""
@@ -278,6 +307,10 @@ class LogLogLog(LogView):
             self._display_widths._array.flush()
             self._wraptree._data.flush()
             logger.debug(f"Data flush took {time.time() - save_start:.3f}s")
+
+        # Save current file size to cache metadata
+        current_file_size = self._file.tell()
+        self._save_file_size(current_file_size)
 
         logger.info(f"Total update time: {time.time() - start_time:.3f}s")
 

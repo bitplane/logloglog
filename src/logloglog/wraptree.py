@@ -220,6 +220,10 @@ class WrapTree:
         if node_index == 0:
             return 0
 
+        # Handle zero width case
+        if terminal_width <= 0:
+            return 0
+
         bucket_count = self._data[node_index + NODE_BUCKET_COUNT]
         if bucket_count == 0:
             return 0
@@ -249,6 +253,10 @@ class WrapTree:
     def _seek_in_node(self, node_index: int, target_row: int, terminal_width: int, rows_before: int) -> Tuple[int, int]:
         """Recursively seek in a node."""
         if node_index == 0:
+            raise ValueError(f"Display row {target_row} not found")
+
+        # Handle zero width case
+        if terminal_width <= 0:
             raise ValueError(f"Display row {target_row} not found")
 
         start_line = self._data[node_index + NODE_START_LINE]

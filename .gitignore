@@ -5,4 +5,6 @@ htmlcov
 dist
 coverage.json
 *.log
+*.txt
+*.prof
 .log.pid

@@ -176,21 +176,25 @@ def test_cleanup_handles_broken_symlinks(temp_cache_dir, temp_log_file):
     assert cache_path.exists()
 
 
-def test_hash_includes_device_inode_ctime(temp_cache_dir, temp_log_file):
-    """Test that hash includes device, inode, and ctime."""
+def test_cache_reuse_after_close_reopen(temp_cache_dir):
+    """Test that cache directory is reused when file is unchanged."""
+    from logloglog import LogLogLog
+
+    # Create test file
+    test_file = temp_cache_dir / "test.log"
+    test_file.write_text("Line 1\nLine 2\nLine 3\n")
+
+    # First open - should create cache
     cache = Cache(temp_cache_dir)
+    log1 = LogLogLog(test_file, cache=cache)
+    cache_path1 = log1._index_path
+    assert cache_path1.exists()
+    log1.close()
 
-    # Get original cache path
-    cache_path1 = cache.get_dir(temp_log_file)
+    # Second open - should reuse same cache directory
+    log2 = LogLogLog(test_file, cache=cache)
+    cache_path2 = log2._index_path
+    log2.close()
 
-    # Modify file (changes ctime)
-    import time
-
-    time.sleep(0.1)  # Ensure ctime changes
-    temp_log_file.write_text("modified content\n")
-
-    # Get new cache path
-    cache_path2 = cache.get_dir(temp_log_file)
-
-    # Should be different due to ctime change
-    assert cache_path1 != cache_path2
+    # Should be the same cache directory
+    assert cache_path1 == cache_path2, f"Expected same cache directory, got {cache_path1} vs {cache_path2}"

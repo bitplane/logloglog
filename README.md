@@ -16,11 +16,11 @@ make log
 
 ## TODO
 
-- [ ] Rename to logloglog
-- [ ] Cache module
-  - [ ] Cleanup old caches
-  - [ ] Allocate new cache
-  - [ ] Better cache names like file_name[{md5sum(inode + ctime)[:8]}].ext
+- [x] Rename to logloglog
+- [x] Cache module
+  - [x] Cleanup old caches
+  - [x] Allocate new cache
+  - [x] Better cache names like file_name[{md5sum(inode + ctime)[:8]}].ext
   - [ ] Store path in data file
 - [ ] Features
   - [ ] Pane (tail with width and height)
