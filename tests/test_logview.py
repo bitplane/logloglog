@@ -245,3 +245,57 @@ def test_view_with_real_file(temp_cache_dir):
         log.close()
     finally:
         os.unlink(log_path)
+
+
+def test_view_with_explicit_end(temp_cache_dir):
+    """Test LogView with explicit end parameter to cover line 73."""
+    content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\n"
+
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write(content)
+        log_path = f.name
+
+    try:
+        log = BigLog(log_path, cache_dir=temp_cache_dir)
+
+        # Create view with explicit start and end
+        view = log.at(80, start=1, end=4)  # This should trigger line 73
+
+        # Should be exactly 3 rows (end - start = 4 - 1 = 3)
+        assert len(view) == 3
+
+        # Test that we can access these rows
+        assert view[0] == "Line 2"  # Row 1 in original log
+        assert view[1] == "Line 3"  # Row 2 in original log
+        assert view[2] == "Line 4"  # Row 3 in original log
+
+        log.close()
+    finally:
+        os.unlink(log_path)
+
+
+def test_view_iteration(temp_cache_dir):
+    """Test LogView __iter__ method to cover lines 79-80."""
+    content = "A\nB\nC\n"
+
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write(content)
+        log_path = f.name
+
+    try:
+        log = BigLog(log_path, cache_dir=temp_cache_dir)
+        view = log.at(80)
+
+        # Test iteration using __iter__
+        rows = list(view)  # This calls __iter__ and yields each row
+        assert rows == ["A", "B", "C"]
+
+        # Test iteration in a loop
+        collected = []
+        for row in view:  # This also uses __iter__
+            collected.append(row)
+        assert collected == ["A", "B", "C"]
+
+        log.close()
+    finally:
+        os.unlink(log_path)

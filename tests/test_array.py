@@ -277,6 +277,22 @@ def test_contains(temp_filepath):
     assert 5 not in array
     array.close()
 
+    array.close()
+
+
+def test_iteration_non_empty(temp_filepath):
+    array = Array("i", temp_filepath, "w+b")
+    elements = [10, 20, 30]
+    array.extend(elements)
+    assert list(array) == elements
+    array.close()
+
+
+def test_iteration_empty(temp_filepath):
+    array = Array("i", temp_filepath, "w+b")
+    assert list(array) == []
+    array.close()
+
 
 def test_extend(temp_filepath):
     array = Array("i", temp_filepath, "w+b")
@@ -316,4 +332,26 @@ def test_imul(temp_filepath):
     assert array[3] == 2
     assert array[4] == 1
     assert array[5] == 2
+    array.close()
+
+
+def test_imul_not_implemented(temp_filepath):
+    array = Array("i", temp_filepath, "w+b")
+    array.append(1)
+    # Test with non-integer value
+    result = array.__imul__(1.5)
+    assert result is NotImplemented
+    # Test with negative value
+    result = array.__imul__(-1)
+    assert result is NotImplemented
+    array.close()
+
+
+def test_imul_zero(temp_filepath):
+    array = Array("i", temp_filepath, "w+b")
+    array.extend([1, 2, 3])
+    array *= 0
+    assert len(array) == 0
+    # Verify file is truncated to 0 bytes
+    assert os.path.getsize(temp_filepath) == 0
     array.close()

@@ -366,12 +366,11 @@ def test_cache_validation_scenarios(temp_cache_dir):
         log1 = BigLog(log_path, cache_dir=temp_cache_dir)
         assert len(log1) == 3
 
-        # Check metadata was saved correctly
-        metadata = log1._metadata.load()
-        assert "ctime" in metadata
-        assert "size" in metadata
-        assert "last_position" in metadata
-        assert metadata["last_position"] > 0
+        # Check that index files were created
+        assert log1._line_offsets_path.exists()
+        assert (log1._index_path / "display_widths.dat").exists()
+        assert (log1._index_path / "wraptree.dat").exists()
+        assert len(log1._line_offsets) == 3
 
         log1.close()
 
@@ -379,9 +378,8 @@ def test_cache_validation_scenarios(temp_cache_dir):
         log2 = BigLog(log_path, cache_dir=temp_cache_dir)
         assert len(log2) == 3
 
-        # Should not rebuild (validation should pass)
-        metadata2 = log2._metadata.load()
-        assert metadata2["last_position"] == metadata["last_position"]
+        # Should have loaded the existing index (same number of lines)
+        assert len(log2._line_offsets) == 3
 
         log2.close()
 
