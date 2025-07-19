@@ -5,10 +5,10 @@ import sys
 
 
 from .logloglog import LogLogLog
-from .logview import LogView
+from .logview import WidthView
 
 __version__ = "0.0.1"
-__all__ = ["LogLogLog", "LogView", "configure_logging"]
+__all__ = ["LogLogLog", "WidthView", "configure_logging"]
 
 
 # Configure logging for LogLogLog

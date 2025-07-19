@@ -1,4 +1,4 @@
-"""Tests for LogView functionality."""
+"""Tests for WidthView functionality."""
 
 import tempfile
 import os
@@ -92,9 +92,9 @@ def test_view_width_consistency(log_with_custom_content):
     assert len(log) == 3
 
     # Test different widths
-    view_20 = log.at(20)
-    view_50 = log.at(50)
-    view_200 = log.at(200)
+    view_20 = log.width(20)
+    view_50 = log.width(50)
+    view_200 = log.width(200)
 
     len_20 = len(view_20)
     len_50 = len(view_50)
@@ -132,7 +132,7 @@ def test_incremental_view_calculations(log_with_incremental_lines):
     test_widths = [10, 20, 40, 80, 160]
 
     for width in test_widths:
-        view = log.at(width)
+        view = log.width(width)
         view_rows = len(view)
 
         # Manual calculation
@@ -151,43 +151,10 @@ def test_incremental_view_calculations(log_with_incremental_lines):
         assert view_rows == expected_rows, f"Width {width}: expected {expected_rows} rows, got {view_rows}"
 
 
-def test_view_math_debugging(log_with_incremental_lines):
-    """Debug view calculations by examining specific lines."""
-    log = log_with_incremental_lines
-
-    # Test width 20 specifically
-    width = 20
-    view = log.at(width)
-
-    print(f"\nDebugging width {width}:")
-    print(f"Total lines in log: {len(log)}")
-    print(f"View reports: {len(view)} rows")
-
-    # Check first few lines manually
-    manual_total = 0
-    for i in range(min(10, len(log))):
-        line_len = len(log[i])
-        expected_rows = max(1, (line_len + width - 1) // width) if line_len > 0 else 1
-        manual_total += expected_rows
-        print(f"  Line {i}: len={line_len} -> {expected_rows} rows (running total: {manual_total})")
-
-    # Check the large line
-    line_81_len = len(log[81])
-    line_81_rows = (line_81_len + width - 1) // width
-    print(f"  Line 81: len={line_81_len} -> {line_81_rows} rows")
-
-    # Full manual calculation
-    full_manual = sum(max(1, (len(log[i]) + width - 1) // width) if len(log[i]) > 0 else 1 for i in range(len(log)))
-    print(f"  Full manual total: {full_manual}")
-
-    # This should help us see where the discrepancy is
-    assert len(view) == full_manual
-
-
 def test_view_negative_indexing(log_with_incremental_lines):
     """Test that negative indexing works in views."""
     log = log_with_incremental_lines
-    view = log.at(20)
+    view = log.width(20)
 
     view_len = len(view)
     assert view_len > 0, "View should have some rows"
@@ -214,7 +181,7 @@ def test_multi_line_wrapping(log_with_custom_content):
     log = log_with_custom_content(content)
 
     # Test at width 20 - the 100-char line should become 5 rows
-    view = log.at(20)
+    view = log.width(20)
 
     print("\nTesting 100-char line at width 20:")
     print(f"Total view rows: {len(view)}")
@@ -250,7 +217,7 @@ def test_view_with_real_file(log_with_custom_content):
     assert len(log) == 3
 
     # Create view at width 80
-    view = log.at(80, 0)
+    view = log.width(80)
 
     # View should have some rows (not 0)
     view_length = len(view)
@@ -263,28 +230,9 @@ def test_view_with_real_file(log_with_custom_content):
     log.close()
 
 
-def test_view_with_explicit_end(log_with_custom_content):
-    """Test LogView with explicit end parameter to cover line 73."""
-    content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\n"
-    log = log_with_custom_content(content)
-
-    # Create view with explicit start and end
-    view = log.at(80, start=1, end=4)  # This should trigger line 73
-
-    # Should be exactly 3 rows (end - start = 4 - 1 = 3)
-    assert len(view) == 3
-
-    # Test that we can access these rows
-    assert view[0] == "Line 2"  # Row 1 in original log
-    assert view[1] == "Line 3"  # Row 2 in original log
-    assert view[2] == "Line 4"  # Row 3 in original log
-
-    log.close()
-
-
 def test_view_iteration(simple_log):
-    """Test LogView __iter__ method to cover lines 79-80."""
-    view = simple_log.at(80)
+    """Test WidthView __iter__ method to cover lines 79-80."""
+    view = simple_log.width(80)
 
     # Test iteration using __iter__
     rows = list(view)
@@ -299,5 +247,5 @@ def test_view_iteration(simple_log):
 
 def test_view_zero_width(simple_log):
     """Test that zero width doesn't cause division by zero."""
-    view = simple_log.at(width=0)
+    view = simple_log.width(width=0)
     assert len(view) == 0  # Should have zero logical rows

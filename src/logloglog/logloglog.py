@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable, List, Iterator, Tuple
 from wcwidth import wcswidth
 
-from .logview import DisplayView
+from .logview import WidthView
 from .line_index import LineIndex
 from .cache import Cache
 
@@ -322,35 +322,17 @@ class LogLogLog:
         for i in range(len(self)):
             yield self[i]
 
-    def display(self, width: int, start: int = 0, end: int = None) -> DisplayView:
+    def width(self, width: int) -> WidthView:
         """
-        Create a display view of this log at a specific terminal width.
+        Create a width-specific view of this log.
 
         Args:
             width: Terminal width for line wrapping
-            start: Starting display row (inclusive)
-            end: Ending display row (exclusive), None for end of log
 
         Returns:
-            DisplayView instance for this width
+            WidthView instance for this width
         """
-        return DisplayView(self, width, start, end)
-
-    def at(self, width: int, start: int = 0, end: int = None) -> DisplayView:
-        """
-        Create a view of this log at a specific terminal width.
-
-        Alias for display() method for backward compatibility.
-
-        Args:
-            width: Terminal width for wrapping
-            start: Starting display row
-            end: Ending display row (None for end of log)
-
-        Returns:
-            DisplayView instance
-        """
-        return self.display(width, start, end)
+        return WidthView(self, width)
 
     def line_at_row(self, row: int, width: int) -> Tuple[int, int]:
         """
@@ -389,16 +371,3 @@ class LogLogLog:
             Total display rows
         """
         return self._line_index.get_total_display_rows(width)
-
-    # Keep private methods for backward compatibility
-    def _find_line_at_display_row(self, row: int, width: int) -> Tuple[int, int]:
-        """Find logical line containing display row. (deprecated)"""
-        return self.line_at_row(row, width)
-
-    def _get_total_display_rows(self, width: int) -> int:
-        """Get total display rows at given width. (deprecated)"""
-        return self.total_rows(width)
-
-    def _get_display_row_for_line(self, line_no: int, width: int) -> int:
-        """Get display row where logical line starts. (deprecated)"""
-        return self.row_for_line(line_no, width)

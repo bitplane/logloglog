@@ -55,7 +55,7 @@ class LogWidget(ScrollView):
                 self.set_width(event.size.width)
 
     def set_width(self, width: int):
-        self.log_view = self.log_data.at(width=width)
+        self.log_view = self.log_data.width(width)
         self.virtual_size = Size(width, len(self.log_view))
         self.current_width = width
         self.refresh()

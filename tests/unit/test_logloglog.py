@@ -45,7 +45,7 @@ def test_empty_log(temp_log_file, temp_cache_dir):
     assert len(log) == 0
 
     # Test empty view
-    view = log.at(width=80)
+    view = log.width(80)
     assert len(view) == 0
     log.close()
 
@@ -174,7 +174,7 @@ def test_wrapped_view(temp_cache_dir):
         log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
 
         # View at width 80
-        view = log.at(width=80)
+        view = log.width(80)
 
         # Line 0: 40 chars -> 1 display row
         # Line 1: 120 chars -> 2 display rows (ceil(120/80) = 2)
@@ -211,7 +211,7 @@ def test_custom_width_function(temp_cache_dir):
     try:
         log = LogLogLog(log_path, get_width=custom_width, cache=Cache(temp_cache_dir))
 
-        view = log.at(width=3)
+        view = log.width(3)
 
         # Line 0: "abc" = 3 chars -> 1 row
         # Line 1: "defgh" = 5 chars -> 2 rows (ceil(5/3) = 2)
@@ -313,36 +313,6 @@ def test_negative_indexing_logloglog(log_with_content):
 
     with pytest.raises(IndexError):
         _ = log[3]  # Too positive
-
-
-def test_view_with_real_file(temp_cache_dir):
-    """Test view creation works with actual content."""
-    content = "Short line\n" + "x" * 100 + "\nAnother line\n"
-
-    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-        f.write(content)
-        log_path = f.name
-
-    try:
-        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
-
-        # Should have 3 lines
-        assert len(log) == 3
-
-        # Create view at width 80
-        view = log.at(80, 0)
-
-        # View should have some rows (not 0)
-        view_length = len(view)
-        assert view_length > 0, f"View should have rows, got {view_length}"
-
-        # Should be able to access first row
-        first_row = view[0]
-        assert first_row == "Short line"
-
-        log.close()
-    finally:
-        os.unlink(log_path)
 
 
 def test_file_modification_detection(temp_cache_dir):
@@ -732,8 +702,8 @@ def test_file_truncation_during_update(temp_cache_dir):
         os.unlink(log_path)
 
 
-def test_get_display_row_for_line(temp_cache_dir):
-    """Test _get_display_row_for_line method (line 355)."""
+def test_row_for_line(temp_cache_dir):
+    """Test row_for_line method."""
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
         # Write lines with different widths
         f.write("Short\n")  # width 5
@@ -750,13 +720,13 @@ def test_get_display_row_for_line(temp_cache_dir):
         # Line 1: 4 rows (34 chars)
         # Line 2: 2 rows (11 chars)
 
-        row = log._get_display_row_for_line(0, 10)
+        row = log.row_for_line(0, 10)
         assert row == 0  # First line starts at row 0
 
-        row = log._get_display_row_for_line(1, 10)
+        row = log.row_for_line(1, 10)
         assert row == 1  # Second line starts after first line (1 row)
 
-        row = log._get_display_row_for_line(2, 10)
+        row = log.row_for_line(2, 10)
         assert row == 5  # Third line starts after first two (1 + 4 rows)
 
         log.close()
