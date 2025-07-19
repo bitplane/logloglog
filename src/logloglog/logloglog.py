@@ -9,9 +9,7 @@ from typing import Callable, List, Iterator, Tuple
 from wcwidth import wcswidth
 
 from .logview import LogView
-from .index import DisplayWidths
-from .wraptree import WrapTree
-from arrayfile import Array
+from .line_index import LineIndex
 from .cache import Cache
 
 # Configure logger
@@ -71,11 +69,9 @@ class LogLogLog(LogView):
 
         # Initialize index components
         self._index_path = self.cache.get_dir(self.path)
-        self._display_widths = DisplayWidths(self._index_path)
-        self._wraptree = WrapTree(self._index_path, self._display_widths)
+        self._line_index = LineIndex(self._index_path)
 
-        # Line offset array for O(1) access
-        self._line_offsets_path = self._index_path / "line_offsets.dat"
+        # File size tracking
         self._file_size_path = self._index_path / "file_size.dat"
 
         # File tracking
@@ -105,15 +101,15 @@ class LogLogLog(LogView):
 
         # Check if index exists and is valid
         validate_start = time.time()
-        line_offsets_exists = self._line_offsets_path.exists()
-        display_widths_exists = (self._index_path / "display_widths.dat").exists()
-        wraptree_exists = (self._index_path / "wraptree.dat").exists()
+        positions_exists = (self._index_path / "positions.dat").exists()
+        widths_exists = (self._index_path / "widths.dat").exists()
+        summaries_exists = (self._index_path / "summaries.dat").exists()
         file_size_exists = self._file_size_path.exists()
 
-        index_exists = line_offsets_exists and display_widths_exists and wraptree_exists and file_size_exists
+        index_exists = positions_exists and widths_exists and summaries_exists and file_size_exists
 
         logger.debug(
-            f"Index file check - line_offsets: {line_offsets_exists}, display_widths: {display_widths_exists}, wraptree: {wraptree_exists}, file_size: {file_size_exists}"
+            f"Index file check - positions: {positions_exists}, widths: {widths_exists}, summaries: {summaries_exists}, file_size: {file_size_exists}"
         )
 
         # Open log file early so we can use it for validation
@@ -125,23 +121,21 @@ class LogLogLog(LogView):
             try:
                 # Try to open existing index
                 load_start = time.time()
-                self._display_widths.open(create=False)
-                self._wraptree.open(create=False)
-                self._line_offsets = Array(self._offset_dtype, str(self._line_offsets_path), "r+b")
+                self._line_index.open(create=False)
 
                 # Calculate last_position from last line offset
-                if len(self._line_offsets) > 0:
-                    last_offset = self._line_offsets[-1]
+                if len(self._line_index) > 0:
+                    last_offset = self._line_index.get_line_position(len(self._line_index) - 1)
                     self._file.seek(last_offset)
                     self._file.readline()  # Read to end of last line
                     self._last_position = self._file.tell()
                     logger.debug(f"Calculated last_position: {self._last_position:,} from offset {last_offset:,}")
                 else:
                     self._last_position = 0
-                    logger.debug("Empty line_offsets array, setting last_position to 0")
+                    logger.debug("Empty line index, setting last_position to 0")
 
                 logger.debug(f"Index load took {time.time() - load_start:.3f}s - last_pos: {self._last_position:,}")
-                logger.debug(f"Loaded {len(self._line_offsets):,} line offsets, {len(self._display_widths):,} widths")
+                logger.debug(f"Loaded {len(self._line_index):,} lines")
 
                 # Check if file size has changed (shrunk = truncated)
                 cached_file_size = self._load_file_size()
@@ -157,10 +151,7 @@ class LogLogLog(LogView):
                 index_exists = False
                 # Close any partially opened components
                 try:
-                    self._display_widths.close()
-                    self._wraptree.close()
-                    if hasattr(self, "_line_offsets") and self._line_offsets:
-                        self._line_offsets.close()
+                    self._line_index.close()
                 except Exception:  # noqa: BLE001
                     pass
 
@@ -173,10 +164,7 @@ class LogLogLog(LogView):
             self._clear_index()
             logger.debug(f"Clear index took {time.time() - clear_start:.3f}s")
 
-            self._display_widths.open(create=True)
-            self._wraptree.open(create=True)
-            # Create new line offsets array
-            self._line_offsets = Array(self._offset_dtype, str(self._line_offsets_path), "w+b")
+            self._line_index.open(create=True)
             self._last_position = 0
 
         # Update index with any new content
@@ -215,10 +203,7 @@ class LogLogLog(LogView):
         if self._file:
             self._file.close()
             self._file = None
-        self._display_widths.close()
-        self._wraptree.close()
-        if self._line_offsets:
-            self._line_offsets.close()
+        self._line_index.close()
 
     def __enter__(self):
         """Context manager entry."""
@@ -244,13 +229,8 @@ class LogLogLog(LogView):
                 f"File truncated/rotated - rebuilding index (size: {current_size:,}, last_pos: {self._last_position:,})"
             )
             self._clear_index()
-            self._display_widths.close()
-            self._wraptree.close()
-            if self._line_offsets:
-                self._line_offsets.close()
-            self._display_widths.open(create=True)
-            self._wraptree.open(create=True)
-            self._line_offsets = Array(self._offset_dtype, str(self._line_offsets_path), "w+b")
+            self._line_index.close()
+            self._line_index.open(create=True)
             # Reset position to start over
             self._last_position = 0
 
@@ -270,15 +250,12 @@ class LogLogLog(LogView):
             if not line_data:
                 break  # EOF
 
-            # Record line offset for O(1) access
-            self._line_offsets.append(raw_pos)
-
             # Decode and strip newline
             line = line_data.decode("utf-8", errors="replace").rstrip("\n\r")
 
-            # Calculate and store width
+            # Calculate width and add to index
             width = self.get_width(line)
-            self._display_widths.append(width)
+            self._line_index.append_line(raw_pos, width)
             width_count += 1
 
             # Update position to end of this line
@@ -293,20 +270,8 @@ class LogLogLog(LogView):
         if width_count > 0:
             logger.debug(f"Stream processing took {time.time() - stream_start:.3f}s for {width_count:,} lines")
 
-            # Update tree structure
-            tree_start = time.time()
-            total_lines = len(self._display_widths)
-            logger.debug(f"Updating tree for {total_lines:,} total lines")
-            self._wraptree.update_tree(total_lines)
-            logger.debug(f"Tree update took {time.time() - tree_start:.3f}s")
-
-            # Flush data to disk
-            save_start = time.time()
-            if self._line_offsets:
-                self._line_offsets.flush()
-            self._display_widths._array.flush()
-            self._wraptree._data.flush()
-            logger.debug(f"Data flush took {time.time() - save_start:.3f}s")
+            # No tree update needed - summaries are created automatically during append
+            # LineIndex handles flushing internally
 
         # Save current file size to cache metadata
         current_file_size = self._file.tell()
@@ -331,23 +296,15 @@ class LogLogLog(LogView):
         self._last_position = self._file.tell()
 
         # Update index
-        self._line_offsets.append(raw_pos)
         width = self.get_width(line)
-        self._display_widths.append(width)
+        self._line_index.append_line(raw_pos, width)
 
-        # Update tree
-        total_lines = len(self._display_widths)
-        self._wraptree.update_tree(total_lines)
-
-        # Update file stats and flush data
+        # Update file stats
         self._file_stat = os.stat(self.path)
-        self._line_offsets.flush()
-        self._display_widths._array.flush()
-        self._wraptree._data.flush()
 
     def __getitem__(self, line_no: int) -> str:
         """Get a logical line by line number."""
-        total_lines = len(self._line_offsets)
+        total_lines = len(self._line_index)
 
         # Handle negative indexing
         if line_no < 0:
@@ -357,7 +314,7 @@ class LogLogLog(LogView):
             raise IndexError(f"Line {line_no} out of range")
 
         # O(1) access using line offset index
-        offset = self._line_offsets[line_no]
+        offset = self._line_index.get_line_position(line_no)
         self._file.seek(offset)
         line_data = self._file.readline()
 
@@ -368,7 +325,7 @@ class LogLogLog(LogView):
 
     def __len__(self) -> int:
         """Get total number of logical lines."""
-        return len(self._line_offsets)
+        return len(self._line_index)
 
     def __iter__(self) -> Iterator[str]:
         """Iterate over all logical lines."""
@@ -391,8 +348,12 @@ class LogLogLog(LogView):
 
     def _find_line_at_display_row(self, row: int, width: int) -> Tuple[int, int]:
         """Find logical line containing display row."""
-        return self._wraptree.seek_display_row(row, width)
+        return self._line_index.get_line_for_display_row(row, width)
 
     def _get_total_display_rows(self, width: int) -> int:
         """Get total display rows at given width."""
-        return self._wraptree.get_total_rows(width)
+        return self._line_index.get_total_display_rows(width)
+
+    def _get_display_row_for_line(self, line_no: int, width: int) -> int:
+        """Get display row where logical line starts (for resize fix)."""
+        return self._line_index.get_display_row_for_line(line_no, width)

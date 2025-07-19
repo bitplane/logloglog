@@ -38,37 +38,17 @@ class LogWidget(ScrollView):
 
             if self.log_view and self.current_width > 0 and current_scroll_y > 0:
                 try:
-                    # Find which logical line we're currently viewing BEFORE changing width
+                    # Find which logical line we're currently viewing using OLD width
                     logical_line, line_offset = self.log_data._find_line_at_display_row(
                         current_scroll_y, self.current_width
                     )
 
-                    # Now set the new width
-                    self.set_width(event.size.width)
-
-                    # Calculate display row for that logical line at new width
-                    new_display_row = 0
-                    for i in range(logical_line):
-                        if hasattr(self.log_data, "_display_widths") and i < len(self.log_data._display_widths):
-                            line_width = self.log_data._display_widths[i]
-                        else:
-                            line_text = self.log_data[i] if i < len(self.log_data) else ""
-                            line_width = (
-                                self.log_data.get_width(line_text)
-                                if hasattr(self.log_data, "get_width")
-                                else len(line_text)
-                            )
-                        wrapped_lines = (
-                            max(1, (line_width + event.size.width - 1) // event.size.width)
-                            if event.size.width > 0
-                            else 1
-                        )
-                        new_display_row += wrapped_lines
-
-                    # Add the offset within the logical line
+                    # Use the new API to get display row at NEW width
+                    new_display_row = self.log_data._get_display_row_for_line(logical_line, event.size.width)
                     new_display_row += line_offset
 
-                    # Scroll to maintain position
+                    # Now update width and scroll
+                    self.set_width(event.size.width)
                     self.scroll_to(y=new_display_row, animate=False)
                 except Exception:
                     # Fallback
