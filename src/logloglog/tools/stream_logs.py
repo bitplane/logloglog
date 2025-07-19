@@ -154,7 +154,7 @@ def stream_historical_logs() -> None:
 
 def follow_live_logs(last_modified_minutes: int = 60) -> None:
     """
-    Follow live log files using tail -F.
+    Follow live log files using pure Python implementation.
 
     Args:
         last_modified_minutes: Only follow files modified within this many minutes
@@ -169,18 +169,84 @@ def follow_live_logs(last_modified_minutes: int = 60) -> None:
     for logfile in live_logs:
         print(f"Will tail: {logfile}", file=sys.stderr)
 
-    # Use tail -F to follow the files (start from end with -n0)
-    cmd = ["tail", "-n0", "-F"] + [str(f) for f in live_logs]
+    # Pure Python implementation of tail -F
+    tail_multiple_files(live_logs)
+
+
+def tail_multiple_files(filepaths: List[Path]) -> None:
+    """
+    Pure Python implementation of tail -F for multiple files.
+
+    Args:
+        filepaths: List of file paths to tail
+    """
+    # Keep track of file handles and positions
+    file_states = {}
+
+    # Initialize file states - seek to end (like tail -n0)
+    for filepath in filepaths:
+        try:
+            f = open(filepath, "r", encoding="utf-8", errors="ignore")
+            f.seek(0, 2)  # Seek to end
+            file_states[filepath] = {
+                "handle": f,
+                "position": f.tell(),
+                "inode": filepath.stat().st_ino if filepath.exists() else None,
+            }
+        except (OSError, PermissionError):
+            # Skip files we can't open
+            pass
 
     try:
-        # Execute tail and let it run until interrupted
-        subprocess.run(cmd, check=False)
+        while True:
+            any_output = False
+
+            for filepath in list(file_states.keys()):
+                state = file_states[filepath]
+
+                try:
+                    # Check if file was rotated/recreated (inode changed)
+                    if filepath.exists():
+                        current_inode = filepath.stat().st_ino
+                        if state["inode"] != current_inode:
+                            # File was rotated, reopen
+                            state["handle"].close()
+                            f = open(filepath, "r", encoding="utf-8", errors="ignore")
+                            file_states[filepath] = {"handle": f, "position": 0, "inode": current_inode}
+                            state = file_states[filepath]
+
+                    # Read new content
+                    f = state["handle"]
+                    f.seek(state["position"])
+                    new_content = f.read()
+
+                    if new_content:
+                        print(new_content, end="")
+                        sys.stdout.flush()
+                        any_output = True
+                        state["position"] = f.tell()
+
+                except (OSError, PermissionError):
+                    # File became unreadable, remove from tracking
+                    if filepath in file_states:
+                        try:
+                            file_states[filepath]["handle"].close()
+                        except Exception:
+                            pass
+                        del file_states[filepath]
+
+            if not any_output:
+                time.sleep(0.1)  # Brief sleep when no new content
+
     except KeyboardInterrupt:
-        # Clean exit on Ctrl+C
         pass
-    except FileNotFoundError:
-        print("Error: 'tail' command not found.", file=sys.stderr)
-        sys.exit(1)
+    finally:
+        # Clean up file handles
+        for state in file_states.values():
+            try:
+                state["handle"].close()
+            except Exception:
+                pass
 
 
 def setup_signal_handlers() -> None:
@@ -207,7 +273,9 @@ Examples:
         """,
     )
 
-    parser.add_argument("--follow-only", action="store_true", help="Only follow live logs, skip historical")
+    parser.add_argument("--historical-only", action="store_true", help="Only dump historical logs, then exit")
+
+    parser.add_argument("--follow-only", action="store_true", help="Only follow live logs")
 
     parser.add_argument(
         "--last-modified",
@@ -219,13 +287,22 @@ Examples:
 
     args = parser.parse_args()
 
+    # Validate arguments
+    if args.historical_only and args.follow_only:
+        print("Error: Cannot use both --historical-only and --follow-only", file=sys.stderr)
+        sys.exit(1)
+
     setup_signal_handlers()
 
     try:
-        if not args.follow_only:
+        if args.historical_only:
             stream_historical_logs()
-
-        follow_live_logs(args.last_modified)
+        elif args.follow_only:
+            follow_live_logs(args.last_modified)
+        else:
+            # Default: both historical then live (original behavior)
+            stream_historical_logs()
+            follow_live_logs(args.last_modified)
 
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)

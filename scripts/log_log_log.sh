@@ -32,15 +32,15 @@ old_logs() {
     # Remove existing file
     rm -f "$OUTPUT_FILE"
 
-    # Source venv and call Python tool for historical logs
+    # Source venv and call Python tool for historical logs only (blocking)
     source .venv/bin/activate
-    python -m logloglog.tools.stream_logs >> "$OUTPUT_FILE"
+    python -m logloglog.tools.stream_logs --historical-only > "$OUTPUT_FILE"
 }
 
 live_logs() {
     echo "Following logs..."
 
-    # Source venv and call Python tool for live logs in background
+    # Source venv and call Python tool for live logs only in background (blocking until killed)
     source .venv/bin/activate
     python -m logloglog.tools.stream_logs --follow-only >> "$OUTPUT_FILE" 2>/dev/null &
 
