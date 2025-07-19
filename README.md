@@ -16,24 +16,14 @@ make log
 
 ## TODO
 
-- [ ] Fix main functionality
-  - [ ] Some dickhead AI flattened my btree
-  - [x] Move Array to different project so AI stops pissing about with it
-- [ ] Testing
-  - [x] Move `log_log_log.sh` into Python (`tools.all_logs`)
+- [x] Fix main functionality
 - [ ] Features
-  - [ ] Pane (tail with width and height)
-  - [ ] Scrolly (pane + vertical scrollbar)
-  - [ ] Scrollx (no wrap, char wrap, word wrap)
   - [ ] Search
   - [ ] Timestamped
 - [ ] Line formatters (plain, ansi-stripped, jsonpp?...)
 - [ ] Async/non-blocking design
   - [ ] Make log processing async to avoid blocking
   - [ ] Support streaming updates
-- [ ] Interface design and view mixins
-  - [ ] Proper view mixin architecture
-  - [ ] Pipeable view types (search, filter, transform)
 - [ ] Multiple display backends
   - [ ] WebSocket/FastAPI for web UIs
   - [ ] Pipe commands for shell integration
