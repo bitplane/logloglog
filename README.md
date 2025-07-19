@@ -16,18 +16,18 @@ make log
 
 ## TODO
 
-- [x] Rename to logloglog
-- [x] Cache module
-  - [x] Cleanup old caches
-  - [x] Allocate new cache
-  - [x] Better cache names like file_name[{md5sum(inode + ctime)[:8]}].ext
-  - [ ] Store path in data file
+- [ ] Fix main functionality
+  - [ ] Some dickhead AI flattened my btree
+  - [x] Move Array to different project so AI stops pissing about with it
+- [ ] Testing
+  - [x] Move `log_log_log.sh` into Python (`tools.all_logs`)
 - [ ] Features
   - [ ] Pane (tail with width and height)
   - [ ] Scrolly (pane + vertical scrollbar)
   - [ ] Scrollx (no wrap, char wrap, word wrap)
   - [ ] Search
-- [ ] Line formatters (strip ansi, plain, jsonpp...)
+  - [ ] Timestamped
+- [ ] Line formatters (plain, ansi-stripped, jsonpp?...)
 - [ ] Async/non-blocking design
   - [ ] Make log processing async to avoid blocking
   - [ ] Support streaming updates
@@ -47,3 +47,4 @@ make log
   - [ ] Periodic cleanup of cache directories
   - [ ] Check file existence by inode lookup
   - [ ] Handle file rotation and moves
+

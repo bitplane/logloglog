@@ -23,10 +23,13 @@ docs: .docs/index.html ## build the documentation
 clean:  ## delete caches and the venv
 	scripts/clean.sh
 
-.log.pid log.log.log: scripts/log_log_log.sh  ## create log.log.log from system logs
+logs/:
+	mkdir -p logs/
+
+.log.pid logs/log.log.log: scripts/log_log_log.sh logs/  ## create logs/log.log.log from system logs
 	scripts/log_log_log.sh
 
-log: .log.pid  ## create log.log.log from system logs
+log: .log.pid  ## create logs/log.log.log from system logs
 
 log-stop:  ## stop the live log tail process
 	scripts/log_log_log.sh -k
