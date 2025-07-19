@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable, List, Iterator, Tuple
 from wcwidth import wcswidth
 
-from .logview import LogView
+from .logview import DisplayView
 from .line_index import LineIndex
 from .cache import Cache
 
@@ -38,7 +38,7 @@ def default_split_lines(text: str) -> List[str]:
     return lines
 
 
-class LogLogLog(LogView):
+class LogLogLog:
     """
     Efficient scrollback indexing for large log files.
 
@@ -82,9 +82,6 @@ class LogLogLog(LogView):
 
         # Open and validate index
         self._open()
-
-        # Initialize as a LogView of the entire log
-        super().__init__(self, float("inf"), 0)
 
     def _open(self):
         """Open the log file and index."""
@@ -325,9 +322,25 @@ class LogLogLog(LogView):
         for i in range(len(self)):
             yield self[i]
 
-    def at(self, width: int, start: int = 0, end: int = None) -> LogView:
+    def display(self, width: int, start: int = 0, end: int = None) -> DisplayView:
         """
-        Create a view at specific terminal width.
+        Create a display view of this log at a specific terminal width.
+
+        Args:
+            width: Terminal width for line wrapping
+            start: Starting display row (inclusive)
+            end: Ending display row (exclusive), None for end of log
+
+        Returns:
+            DisplayView instance for this width
+        """
+        return DisplayView(self, width, start, end)
+
+    def at(self, width: int, start: int = 0, end: int = None) -> DisplayView:
+        """
+        Create a view of this log at a specific terminal width.
+
+        Alias for display() method for backward compatibility.
 
         Args:
             width: Terminal width for wrapping
@@ -335,18 +348,57 @@ class LogLogLog(LogView):
             end: Ending display row (None for end of log)
 
         Returns:
-            LogView instance
+            DisplayView instance
         """
-        return LogView(self, width, start, end)
+        return self.display(width, start, end)
 
-    def _find_line_at_display_row(self, row: int, width: int) -> Tuple[int, int]:
-        """Find logical line containing display row."""
+    def line_at_row(self, row: int, width: int) -> Tuple[int, int]:
+        """
+        Find which logical line contains the given display row.
+
+        Args:
+            row: Display row number
+            width: Terminal width
+
+        Returns:
+            Tuple of (line_number, offset_within_line)
+        """
         return self._line_index.get_line_for_display_row(row, width)
 
-    def _get_total_display_rows(self, width: int) -> int:
-        """Get total display rows at given width."""
+    def row_for_line(self, line_no: int, width: int) -> int:
+        """
+        Get the display row where a logical line starts.
+
+        Args:
+            line_no: Logical line number
+            width: Terminal width
+
+        Returns:
+            Display row number
+        """
+        return self._line_index.get_display_row_for_line(line_no, width)
+
+    def total_rows(self, width: int) -> int:
+        """
+        Get total number of display rows at given width.
+
+        Args:
+            width: Terminal width
+
+        Returns:
+            Total display rows
+        """
         return self._line_index.get_total_display_rows(width)
 
+    # Keep private methods for backward compatibility
+    def _find_line_at_display_row(self, row: int, width: int) -> Tuple[int, int]:
+        """Find logical line containing display row. (deprecated)"""
+        return self.line_at_row(row, width)
+
+    def _get_total_display_rows(self, width: int) -> int:
+        """Get total display rows at given width. (deprecated)"""
+        return self.total_rows(width)
+
     def _get_display_row_for_line(self, line_no: int, width: int) -> int:
-        """Get display row where logical line starts (for resize fix)."""
-        return self._line_index.get_display_row_for_line(line_no, width)
+        """Get display row where logical line starts. (deprecated)"""
+        return self.row_for_line(line_no, width)

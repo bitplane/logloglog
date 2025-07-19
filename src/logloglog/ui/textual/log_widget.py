@@ -39,12 +39,10 @@ class LogWidget(ScrollView):
             if self.log_view and self.current_width > 0 and current_scroll_y > 0:
                 try:
                     # Find which logical line we're currently viewing using OLD width
-                    logical_line, line_offset = self.log_data._find_line_at_display_row(
-                        current_scroll_y, self.current_width
-                    )
+                    logical_line, line_offset = self.log_data.line_at_row(current_scroll_y, self.current_width)
 
                     # Use the new API to get display row at NEW width
-                    new_display_row = self.log_data._get_display_row_for_line(logical_line, event.size.width)
+                    new_display_row = self.log_data.row_for_line(logical_line, event.size.width)
                     new_display_row += line_offset
 
                     # Now update width and scroll

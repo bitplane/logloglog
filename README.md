@@ -16,20 +16,10 @@ make log
 
 ## TODO
 
-- [x] Fix main functionality
-- [ ] Features
-  - [ ] Search
-  - [ ] Timestamped
-- [ ] Line formatters (plain, ansi-stripped, jsonpp?...)
 - [ ] Async/non-blocking design
   - [ ] Make log processing async to avoid blocking
   - [ ] Support streaming updates
 - [ ] Multiple display backends
-  - [ ] WebSocket/FastAPI for web UIs
-  - [ ] Pipe commands for shell integration
-  - [ ] Rich for direct terminal display
-  - [ ] Textual for interactive TUIs
-  - [ ] Curses/urwid fallbacks
 - [ ] Python logging integration
   - [ ] Direct logger handlers
   - [ ] Log level filtering and formatting

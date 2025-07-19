@@ -1,17 +1,17 @@
-"""LogView class for viewing logs at a specific terminal width."""
+"""DisplayView class for viewing logs at a specific terminal width."""
 
-from typing import Iterator, TYPE_CHECKING
+from typing import Iterator, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .logloglog import LogLogLog
 
 
-class LogView:
-    """A view of a LogLogLog at a specific terminal width."""
+class DisplayView:
+    """A display view of a LogLogLog at a specific terminal width."""
 
     def __init__(self, logloglog: "LogLogLog", width: int, start: int = 0, end: int = None):
         """
-        Initialize a LogView.
+        Initialize a DisplayView.
 
         Args:
             logloglog: The LogLogLog instance to view
@@ -24,6 +24,51 @@ class LogView:
         self._start = start
         self._end = end
         self._cached_length = None
+
+    def line_at_row(self, row: int) -> Tuple[int, int]:
+        """
+        Find which logical line contains the given display row.
+
+        Args:
+            row: Display row number (0-based within this view)
+
+        Returns:
+            Tuple of (line_number, offset_within_line)
+
+        Raises:
+            IndexError: If row is out of bounds
+        """
+        if row < 0 or row >= len(self):
+            raise IndexError(f"Display row {row} out of range")
+
+        # Convert view-relative row to absolute display row
+        absolute_row = self._start + row
+        return self._logloglog._find_line_at_display_row(absolute_row, self._width)
+
+    def row_for_line(self, line_no: int) -> int:
+        """
+        Get the display row where a logical line starts.
+
+        Args:
+            line_no: Logical line number
+
+        Returns:
+            Display row number (relative to this view)
+
+        Raises:
+            IndexError: If line is not visible in this view
+        """
+        absolute_row = self._logloglog._get_display_row_for_line(line_no, self._width)
+        view_row = absolute_row - self._start
+
+        if view_row < 0 or view_row >= len(self):
+            raise IndexError(f"Line {line_no} not visible in this view")
+
+        return view_row
+
+    def total_rows(self) -> int:
+        """Get total number of display rows in this view."""
+        return len(self)
 
     def __getitem__(self, row_no: int) -> str:
         """
@@ -47,11 +92,8 @@ class LogView:
         if row_no < 0 or row_no >= view_length:
             raise IndexError(f"Display row {row_no} out of range")
 
-        # Convert view-relative row to absolute display row
-        absolute_row = self._start + row_no
-
         # Find the logical line and position within it
-        line_no, line_offset = self._logloglog._find_line_at_display_row(absolute_row, self._width)
+        line_no, line_offset = self.line_at_row(row_no)
 
         # Get the line and calculate the wrapped portion
         line = self._logloglog[line_no]
@@ -78,3 +120,7 @@ class LogView:
         """Iterate over display rows."""
         for i in range(len(self)):
             yield self[i]
+
+
+# Keep LogView as an alias for backward compatibility
+LogView = DisplayView
