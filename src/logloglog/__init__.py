@@ -5,7 +5,7 @@ import sys
 
 
 from .logloglog import LogLogLog
-from .logview import WidthView
+from .widthview import WidthView
 
 __version__ = "0.0.1"
 __all__ = ["LogLogLog", "WidthView", "configure_logging"]

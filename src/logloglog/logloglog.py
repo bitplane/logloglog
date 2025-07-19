@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable, List, Iterator, Tuple
 from wcwidth import wcswidth
 
-from .logview import WidthView
+from .widthview import WidthView
 from .line_index import LineIndex
 from .cache import Cache
 
