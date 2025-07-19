@@ -8,7 +8,7 @@ from arrayfile import Array
 logger = logging.getLogger(__name__)
 
 # Configuration
-MAX_WIDTH = 256  # Maximum terminal width we support
+MAX_WIDTH = 512  # Maximum terminal width we support
 SUMMARY_INTERVAL = 1000  # Store summary every N lines
 
 
@@ -106,7 +106,7 @@ class LineIndex:
             else:
                 # Calculate rows for each terminal width
                 for term_width in range(1, MAX_WIDTH + 1):
-                    rows = (line_width + term_width - 1) // term_width  # Ceiling division
+                    rows = max(1, (line_width + term_width - 1) // term_width)  # Ceiling division, min 1 row
                     width_totals[term_width - 1] += rows * count
 
         # Store all width totals in summary array

@@ -1,6 +1,7 @@
 """Main LogLogLog implementation."""
 
 import os
+import shutil
 import time
 import logging
 from functools import lru_cache
@@ -150,10 +151,7 @@ class LogLogLog(LogView):
                 logger.exception(f"Failed to load existing index: {e}, rebuilding")
                 index_exists = False
                 # Close any partially opened components
-                try:
-                    self._line_index.close()
-                except Exception:  # noqa: BLE001
-                    pass
+                self._line_index.close()
 
         logger.debug(f"Index validation took {time.time() - validate_start:.3f}s - valid: {index_exists}")
 
@@ -190,8 +188,6 @@ class LogLogLog(LogView):
     def _clear_index(self):
         """Clear the index directory."""
         # Clear the cache directory for this file
-        import shutil
-
         if self._index_path.exists():
             shutil.rmtree(self._index_path)
         # Get a fresh cache directory
@@ -317,9 +313,6 @@ class LogLogLog(LogView):
         offset = self._line_index.get_line_position(line_no)
         self._file.seek(offset)
         line_data = self._file.readline()
-
-        if not line_data:
-            raise IndexError(f"Line {line_no} out of range")
 
         return line_data.decode("utf-8", errors="replace").rstrip("\n\r")
 

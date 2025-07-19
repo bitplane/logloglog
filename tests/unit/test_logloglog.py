@@ -50,6 +50,34 @@ def test_empty_log(temp_log_file, temp_cache_dir):
     log.close()
 
 
+def test_truncated_logfile(temp_cache_dir):
+    """Test behavior when logfile is truncated after initial indexing."""
+    # Create initial log file with content
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("Line 1\nLine 2\nLine 3\nLine 4\nLine 5\n")
+        log_path = f.name
+
+    try:
+        # Open and index the log
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        assert len(log) == 5
+        log.close()
+
+        # Truncate the file to smaller size
+        with open(log_path, "w") as f:
+            f.write("Line 1\nLine 2\n")
+
+        # Reopen - should detect truncation and rebuild index
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        assert len(log) == 2
+        assert log[0] == "Line 1"
+        assert log[1] == "Line 2"
+        log.close()
+
+    finally:
+        os.unlink(log_path)
+
+
 def test_simple_lines(temp_cache_dir):
     """Test with simple text lines."""
     content = "Hello world\nThis is line 2\nShort\nA very long line that should wrap at 80 characters and continue beyond that point"
@@ -191,6 +219,32 @@ def test_custom_width_function(temp_cache_dir):
         assert view[0] == "abc"
         assert view[1] == "def"
         assert view[2] == "gh"
+
+        log.close()
+    finally:
+        os.unlink(log_path)
+
+
+def test_progress_logging_large_file(temp_cache_dir, caplog):
+    """Test progress logging for large files (every 100k lines)."""
+    # Create a log file with 100k+ lines to trigger progress logging
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        # Write 100,001 lines to trigger the progress log
+        for i in range(100001):
+            f.write(f"Line {i}\n")
+        log_path = f.name
+
+    try:
+        # Enable logging to capture progress messages
+        import logging
+
+        caplog.set_level(logging.INFO)
+
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+
+        # Check that progress was logged
+        assert any("Processed 100,000 lines" in record.message for record in caplog.records)
+        assert len(log) == 100001
 
         log.close()
     finally:
@@ -605,6 +659,105 @@ def test_index_line_access_error(temp_cache_dir):
         # Test negative indexing beyond bounds
         with pytest.raises(IndexError, match="Line -1 out of range"):
             _ = log[-3]  # -3 + 2 lines = -1, which is out of range
+
+        log.close()
+    finally:
+        os.unlink(log_path)
+
+
+def test_empty_line_index(temp_cache_dir):
+    """Test empty line index handling (lines 135-136)."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        # Create empty file
+        log_path = f.name
+
+    try:
+        # First, create the index files by opening and closing
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        assert len(log) == 0
+        log.close()
+
+        # Now open again - this will load the existing empty index
+        # and trigger lines 135-136
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        assert len(log) == 0
+        log.close()
+    finally:
+        os.unlink(log_path)
+
+
+def test_file_size_cache_missing(temp_cache_dir):
+    """Test missing file size cache (lines 185-186)."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("Test line\n")
+        log_path = f.name
+
+    try:
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        # Delete the file size cache if it exists
+        if log._file_size_path.exists():
+            os.unlink(log._file_size_path)
+
+        # Should return None when file size cache is missing
+        file_size = log._load_file_size()
+        assert file_size is None
+
+        log.close()
+    finally:
+        os.unlink(log_path)
+
+
+def test_file_truncation_during_update(temp_cache_dir):
+    """Test file truncation/rotation handling (lines 224-231)."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("Line 1\nLine 2\nLine 3\n")
+        log_path = f.name
+
+    try:
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        # Initial load
+        assert len(log) == 3
+
+        # Truncate the file
+        with open(log_path, "w") as f:
+            f.write("New line 1\n")
+
+        # Update should detect truncation and rebuild index
+        log.update()
+        assert len(log) == 1
+        assert log[0] == "New line 1"
+
+        log.close()
+    finally:
+        os.unlink(log_path)
+
+
+def test_get_display_row_for_line(temp_cache_dir):
+    """Test _get_display_row_for_line method (line 355)."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        # Write lines with different widths
+        f.write("Short\n")  # width 5
+        f.write("A much longer line that will wrap\n")  # width > 30
+        f.write("Medium line\n")  # width 11
+        log_path = f.name
+
+    try:
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+
+        # Test getting display row for each line at different widths
+        # At width 10:
+        # Line 0: 1 row (5 chars)
+        # Line 1: 4 rows (34 chars)
+        # Line 2: 2 rows (11 chars)
+
+        row = log._get_display_row_for_line(0, 10)
+        assert row == 0  # First line starts at row 0
+
+        row = log._get_display_row_for_line(1, 10)
+        assert row == 1  # Second line starts after first line (1 row)
+
+        row = log._get_display_row_for_line(2, 10)
+        assert row == 5  # Third line starts after first two (1 + 4 rows)
 
         log.close()
     finally:
