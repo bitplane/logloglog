@@ -58,7 +58,7 @@ def test_total_display_rows(temp_index_dir):
     # Test different terminal widths
     assert index.get_total_display_rows(80) == 6  # 1 + 2 + 3
     assert index.get_total_display_rows(40) == 10  # 1 + 3 + 6
-    assert index.get_total_display_rows(20) == 17  # 1 + 5 + 12
+    assert index.get_total_display_rows(20) == 18  # 1 + 5 + 12
 
     index.close()
 
@@ -168,9 +168,10 @@ def test_edge_cases(temp_index_dir):
     assert index.get_line_width(0) == 65535
 
     # Zero width terminal
-    assert index.get_total_display_rows(0) == 1  # Clamped to 1
+    assert index.get_total_display_rows(0) == 0  # No display possible
 
-    # Width beyond MAX_WIDTH
-    assert index.get_total_display_rows(MAX_WIDTH + 100) == 1  # Clamped to MAX_WIDTH
+    # Width beyond MAX_WIDTH (line width 65535, terminal width clamped to 512)
+    expected_rows = (65535 + 512 - 1) // 512  # Ceiling division
+    assert index.get_total_display_rows(MAX_WIDTH + 100) == expected_rows
 
     index.close()

@@ -91,7 +91,7 @@ class LineIndex:
             for line_idx in range(start_line, end_line):
                 line_width = self._line_widths[line_idx]
                 # Calculate wrapped rows: ceil(line_width / terminal_width)
-                rows = (line_width + width - 1) // width if width > 0 else 1
+                rows = max(1, (line_width + width - 1) // width) if width > 0 else 1
                 total_rows += rows
 
             # Store in summary array
@@ -119,8 +119,10 @@ class LineIndex:
         Returns:
             Total number of display rows
         """
-        if width <= 0 or width > MAX_WIDTH:
-            width = min(max(width, 1), MAX_WIDTH)
+        if width <= 0:
+            return 0  # No display possible with zero or negative width
+        if width > MAX_WIDTH:
+            width = MAX_WIDTH
 
         total_rows = 0
 
@@ -134,7 +136,7 @@ class LineIndex:
         start_line = complete_summaries * SUMMARY_INTERVAL
         for line_idx in range(start_line, self._line_count):
             line_width = self._line_widths[line_idx]
-            rows = (line_width + width - 1) // width if width > 0 else 1
+            rows = max(1, (line_width + width - 1) // width) if width > 0 else 1
             total_rows += rows
 
         return total_rows
@@ -153,8 +155,10 @@ class LineIndex:
         if line_no < 0 or line_no >= self._line_count:
             raise IndexError(f"Line {line_no} out of range")
 
-        if width <= 0 or width > MAX_WIDTH:
-            width = min(max(width, 1), MAX_WIDTH)
+        if width <= 0:
+            return 0  # No display possible
+        if width > MAX_WIDTH:
+            width = MAX_WIDTH
 
         display_row = 0
 
@@ -168,7 +172,7 @@ class LineIndex:
         start_line = summary_idx * SUMMARY_INTERVAL
         for line_idx in range(start_line, line_no):
             line_width = self._line_widths[line_idx]
-            rows = (line_width + width - 1) // width if width > 0 else 1
+            rows = max(1, (line_width + width - 1) // width) if width > 0 else 1
             display_row += rows
 
         return display_row
@@ -184,8 +188,10 @@ class LineIndex:
         Returns:
             Tuple of (line_number, row_offset_within_line)
         """
-        if width <= 0 or width > MAX_WIDTH:
-            width = min(max(width, 1), MAX_WIDTH)
+        if width <= 0:
+            raise IndexError(f"Display row {display_row} out of range")  # No display possible
+        if width > MAX_WIDTH:
+            width = MAX_WIDTH
 
         current_row = 0
 
@@ -211,7 +217,7 @@ class LineIndex:
 
         for line_idx in range(start_line, end_line):
             line_width = self._line_widths[line_idx]
-            rows = (line_width + width - 1) // width if width > 0 else 1
+            rows = max(1, (line_width + width - 1) // width) if width > 0 else 1
 
             if current_row + rows > display_row:
                 # Found the line
