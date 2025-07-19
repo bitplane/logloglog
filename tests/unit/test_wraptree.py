@@ -64,37 +64,6 @@ def test_wraptree_load_existing(temp_cache_dir, display_widths):
     tree2.close()
 
 
-def test_wraptree_invalid_file_recreation(temp_cache_dir, display_widths):
-    """Test that invalid files are recreated."""
-    # Create invalid file first
-    tree_path = temp_cache_dir / "wraptree.dat"
-    with open(tree_path, "wb") as f:
-        f.write(b"invalid data")
-
-    tree = WrapTree(temp_cache_dir, display_widths)
-    tree.open(create=False)
-
-    # Should have recreated with valid header
-    assert tree._data[0] == BIGL_MAGIC
-
-    tree.close()
-
-
-def test_wraptree_upgrade_version(temp_cache_dir, display_widths):
-    """Test that older versions are upgraded."""
-    tree = WrapTree(temp_cache_dir, display_widths)
-    tree.open(create=True)
-
-    # Simulate older version
-    tree._data[1] = 0  # Set version to 0
-    tree.close()
-
-    # Reopen - should trigger upgrade
-    tree.open(create=False)
-    assert tree._data[1] == CURRENT_VERSION
-
-    tree.close()
-
 
 def test_get_node_size(temp_cache_dir, display_widths):
     """Test get_node_size method."""

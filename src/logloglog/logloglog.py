@@ -11,7 +11,7 @@ from wcwidth import wcswidth
 from .logview import LogView
 from .index import DisplayWidths
 from .wraptree import WrapTree
-from .core.array import Array
+from arrayfile import Array
 from .cache import Cache
 
 # Configure logger

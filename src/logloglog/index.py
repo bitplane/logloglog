@@ -1,7 +1,7 @@
 """Index data structures for LogLogLog."""
 
 from pathlib import Path
-from .core.array import Array
+from arrayfile import Array
 
 
 class DisplayWidths:

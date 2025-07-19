@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Tuple
 from .index import DisplayWidths
-from .core.array import Array
+from arrayfile import Array
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -75,7 +75,7 @@ class WrapTree:
 
         # Check if upgrade needed
         if self._data[VERSION] < CURRENT_VERSION:
-            self.upgrade()
+            self._upgrade()
 
     def _create_new(self):
         """Create new array with header and empty root node."""
@@ -101,8 +101,9 @@ class WrapTree:
 
     def _ensure_capacity(self, min_size: int):
         """Ensure array has at least min_size capacity."""
-        # The Array class handles capacity automatically on append
-        pass
+        # Append zeros until we reach min_size
+        while len(self._data) < min_size:
+            self._data.append(0)
 
     def close(self):
         """Close the tree and save data."""
@@ -133,13 +134,14 @@ class WrapTree:
                 self._data[count_idx] += 1
                 return
 
-        # Need to add new bucket - append at end of current buckets
-        self._ensure_capacity(buckets_start + (bucket_count + 1) * 2 + 1)
-
-        # Add new width and count
+        # Need to add new bucket - ensure we have capacity first
         new_width_idx = buckets_start + bucket_count
         new_count_idx = buckets_start + bucket_count + 1 + bucket_count  # After all widths
+        min_needed = max(new_width_idx, new_count_idx) + 1
+        
+        self._ensure_capacity(min_needed)
 
+        # Add new width and count
         self._data[new_width_idx] = width
         self._data[new_count_idx] = 1
 
@@ -183,20 +185,18 @@ class WrapTree:
         bucket_count = len(widths)
         logger.debug(f"Sort took {time.time() - sort_start:.3f}s")
 
-        # Update node
+        # Update node - ensure capacity first
         write_start = time.time()
+        buckets_start = root_index + NODE_BUCKETS_START
+        needed_size = buckets_start + bucket_count * 2
+        self._ensure_capacity(needed_size)
+
+        # Now we can safely write
         self._data[root_index + NODE_START_LINE] = 0
         self._data[root_index + NODE_END_LINE] = total_lines
         self._data[root_index + NODE_BUCKET_COUNT] = bucket_count
 
         # Write bucket data: [width1, width2, ...] [count1, count2, ...]
-        buckets_start = root_index + NODE_BUCKETS_START
-
-        # Ensure we have enough space
-        needed_size = buckets_start + bucket_count * 2
-        while len(self._data) < needed_size:
-            self._data.append(0)
-
         # Write widths
         for i, width in enumerate(widths):
             self._data[buckets_start + i] = width
@@ -293,9 +293,9 @@ class WrapTree:
 
         raise ValueError(f"Display row {target_row} not found")
 
-    def upgrade(self):
+    def _upgrade(self):
         """Upgrade file format and compact data."""
-        # TODO: Implement compaction
-        # For now, just update version
-        self._data[VERSION] = CURRENT_VERSION
-        self._data.flush()
+        # For now, just update version - ensure we have capacity first
+        if len(self._data) > VERSION:
+            self._data[VERSION] = CURRENT_VERSION
+            self._data.flush()

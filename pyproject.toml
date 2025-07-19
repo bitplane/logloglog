@@ -23,8 +23,9 @@ classifiers = [
 ]
 
 dependencies = [
-    "wcwidth>=0.2.5",
-    "platformdirs>=3.0"
+    "wcwidth~=0.2.5",
+    "platformdirs~=3.0",
+    "arrayfile~=0.0.1"
 ]
 
 [project.optional-dependencies]
