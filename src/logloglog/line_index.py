@@ -85,17 +85,21 @@ class LineIndex:
         start_line = summary_idx * SUMMARY_INTERVAL
         end_line = start_line + SUMMARY_INTERVAL
 
-        # Calculate cumulative display rows for each width 1..MAX_WIDTH
-        for width in range(1, MAX_WIDTH + 1):
-            total_rows = 0
-            for line_idx in range(start_line, end_line):
-                line_width = self._line_widths[line_idx]
-                # Calculate wrapped rows: ceil(line_width / terminal_width)
-                rows = max(1, (line_width + width - 1) // width) if width > 0 else 1
-                total_rows += rows
+        # Initialize row counts for each width
+        width_totals = [0] * MAX_WIDTH
 
-            # Store in summary array
-            self._summaries.append(total_rows)
+        # Calculate rows for each line once, then accumulate by width
+        for line_idx in range(start_line, end_line):
+            line_width = self._line_widths[line_idx]
+
+            # Calculate rows for all widths for this line
+            for width in range(1, MAX_WIDTH + 1):
+                rows = max(1, (line_width + width - 1) // width)
+                width_totals[width - 1] += rows
+
+        # Store all width totals in summary array
+        for total in width_totals:
+            self._summaries.append(total)
 
     def get_line_position(self, line_no: int) -> int:
         """Get byte position of a line."""

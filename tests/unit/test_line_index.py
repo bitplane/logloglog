@@ -175,3 +175,72 @@ def test_edge_cases(temp_index_dir):
     assert index.get_total_display_rows(MAX_WIDTH + 100) == expected_rows
 
     index.close()
+
+
+def test_line_index_error_paths(temp_index_dir):
+    """Test error handling in LineIndex."""
+    index = LineIndex(temp_index_dir)
+    index.open(create=True)
+
+    # Add some test data
+    index.append_line(0, 10)
+    index.append_line(100, 20)
+
+    # Test negative indices
+    with pytest.raises(IndexError, match="Line -1 out of range"):
+        index.get_line_position(-1)
+
+    with pytest.raises(IndexError, match="Line -1 out of range"):
+        index.get_line_width(-1)
+
+    with pytest.raises(IndexError, match="Line -1 out of range"):
+        index.get_display_row_for_line(-1, 80)
+
+    # Test beyond bounds
+    with pytest.raises(IndexError, match="Line 2 out of range"):
+        index.get_line_position(2)
+
+    with pytest.raises(IndexError, match="Line 2 out of range"):
+        index.get_line_width(2)
+
+    with pytest.raises(IndexError, match="Line 2 out of range"):
+        index.get_display_row_for_line(2, 80)
+
+    # Test display row lookup with zero width
+    with pytest.raises(IndexError, match="Display row 0 out of range"):
+        index.get_line_for_display_row(0, 0)
+
+    # Test display row beyond available rows
+    with pytest.raises(IndexError, match="Display row 999 out of range"):
+        index.get_line_for_display_row(999, 80)
+
+    index.close()
+
+
+def test_line_index_summary_edge_cases(temp_index_dir):
+    """Test edge cases with summary calculations."""
+    index = LineIndex(temp_index_dir)
+    index.open(create=True)
+
+    # Add lines to create partial summary blocks
+    for i in range(SUMMARY_INTERVAL + 500):  # 1500 lines, creates 1 complete + 1 partial summary
+        index.append_line(i * 100, i % 50 + 1)  # Varying widths 1-50
+
+    # Test calculations that cross summary boundaries
+    total_rows = index.get_total_display_rows(25)
+    assert total_rows > 0
+
+    # Test display row calculation in partial summary block
+    display_row = index.get_display_row_for_line(SUMMARY_INTERVAL + 100, 25)
+    assert display_row > 0
+
+    # Test line lookup in partial summary block
+    line_no, offset = index.get_line_for_display_row(display_row, 25)
+    assert line_no == SUMMARY_INTERVAL + 100
+    assert offset == 0
+
+    # Test with MAX_WIDTH to hit boundary conditions
+    total_rows_max = index.get_total_display_rows(MAX_WIDTH)
+    assert total_rows_max == len(index)  # Each line should be 1 row at max width
+
+    index.close()

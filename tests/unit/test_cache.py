@@ -198,3 +198,41 @@ def test_cache_reuse_after_close_reopen(temp_cache_dir):
 
     # Should be the same cache directory
     assert cache_path1 == cache_path2, f"Expected same cache directory, got {cache_path1} vs {cache_path2}"
+
+
+def test_cleanup_broken_symlinks(temp_cache_dir):
+    """Test cleanup handling of broken symlinks to cover lines 77-84."""
+    cache = Cache(temp_cache_dir)
+
+    # Create a fake cache directory with broken symlink
+    fake_cache_dir = temp_cache_dir / "fake_cache"
+    fake_cache_dir.mkdir()
+
+    broken_symlink = fake_cache_dir / "file"
+    non_existent_target = Path("/non/existent/file")
+    broken_symlink.symlink_to(non_existent_target)
+
+    # Verify symlink exists but target doesn't
+    assert broken_symlink.exists() is False  # Broken symlink
+    assert broken_symlink.is_symlink() is True
+
+    # Cleanup should remove the directory with broken symlink
+    cache.cleanup()
+
+    # Directory should be removed
+    assert not fake_cache_dir.exists()
+
+
+def test_cleanup_non_directory_files(temp_cache_dir):
+    """Test cleanup with non-directory files in cache to cover line 67."""
+    cache = Cache(temp_cache_dir)
+
+    # Create a regular file in cache directory (not a subdirectory)
+    regular_file = temp_cache_dir / "not_a_directory.txt"
+    regular_file.write_text("some content")
+
+    # Cleanup should skip non-directory files
+    cache.cleanup()
+
+    # File should still exist (not removed)
+    assert regular_file.exists()

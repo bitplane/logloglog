@@ -552,3 +552,60 @@ def test_index_cleanup_exception_handling(temp_log_with_content):
     log2.close()
 
     log.close()  # Original log close
+
+
+def test_empty_index_loading(temp_cache_dir):
+    """Test loading LogLogLog with completely empty index to cover lines 134-135."""
+    # Create a log file with content first, then simulate empty index on reload
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("Line 1\n")
+        log_path = f.name
+
+    try:
+        # Create LogLogLog first to create index files
+        log1 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        assert len(log1) == 1
+        index_path = log1._index_path
+        log1.close()
+
+        # Now create empty index files to simulate empty index scenario
+        positions_file = index_path / "positions.dat"
+        widths_file = index_path / "widths.dat"
+        summaries_file = index_path / "summaries.dat"
+
+        # Truncate index files to simulate empty index
+        with open(positions_file, "wb") as f:
+            pass  # Empty file
+        with open(widths_file, "wb") as f:
+            pass  # Empty file
+        with open(summaries_file, "wb") as f:
+            pass  # Empty file
+
+        # Reopen - should handle empty index and rebuild
+        log2 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        assert len(log2) == 1  # Should rebuild from log file
+        log2.close()
+    finally:
+        os.unlink(log_path)
+
+
+def test_index_line_access_error(temp_cache_dir):
+    """Test IndexError when accessing non-existent lines to cover line 322."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("Line 1\nLine 2\n")
+        log_path = f.name
+
+    try:
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+
+        # Test accessing beyond available lines
+        with pytest.raises(IndexError, match="Line 2 out of range"):
+            _ = log[2]
+
+        # Test negative indexing beyond bounds
+        with pytest.raises(IndexError, match="Line -1 out of range"):
+            _ = log[-3]  # -3 + 2 lines = -1, which is out of range
+
+        log.close()
+    finally:
+        os.unlink(log_path)
