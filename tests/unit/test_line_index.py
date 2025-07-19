@@ -170,8 +170,8 @@ def test_edge_cases(temp_index_dir):
     # Zero width terminal
     assert index.get_total_display_rows(0) == 0  # No display possible
 
-    # Width beyond MAX_WIDTH (line width 65535, terminal width clamped to 512)
-    expected_rows = (65535 + 512 - 1) // 512  # Ceiling division
+    # Width beyond MAX_WIDTH (line width 65535, terminal width clamped to MAX_WIDTH)
+    expected_rows = (65535 + MAX_WIDTH - 1) // MAX_WIDTH  # Ceiling division
     assert index.get_total_display_rows(MAX_WIDTH + 100) == expected_rows
 
     index.close()

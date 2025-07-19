@@ -8,7 +8,7 @@ from arrayfile import Array
 logger = logging.getLogger(__name__)
 
 # Configuration
-MAX_WIDTH = 512  # Maximum terminal width we support
+MAX_WIDTH = 256  # Maximum terminal width we support
 SUMMARY_INTERVAL = 1000  # Store summary every N lines
 
 
@@ -85,17 +85,29 @@ class LineIndex:
         start_line = summary_idx * SUMMARY_INTERVAL
         end_line = start_line + SUMMARY_INTERVAL
 
-        # Initialize row counts for each width
-        width_totals = [0] * MAX_WIDTH
+        # Find unique line widths in this block
+        unique_widths = set()
+        for line_idx in range(start_line, end_line):
+            unique_widths.add(self._line_widths[line_idx])
 
-        # Calculate rows for each line once, then accumulate by width
+        # Count how many lines have each width
+        width_counts = {}
         for line_idx in range(start_line, end_line):
             line_width = self._line_widths[line_idx]
+            width_counts[line_width] = width_counts.get(line_width, 0) + 1
 
-            # Calculate rows for all widths for this line
-            for width in range(1, MAX_WIDTH + 1):
-                rows = max(1, (line_width + width - 1) // width)
-                width_totals[width - 1] += rows
+        # Calculate totals for each terminal width
+        width_totals = [0] * MAX_WIDTH
+        for line_width, count in width_counts.items():
+            if line_width == 0:
+                # Empty lines always take 1 row regardless of terminal width
+                for i in range(MAX_WIDTH):
+                    width_totals[i] += count
+            else:
+                # Calculate rows for each terminal width
+                for term_width in range(1, MAX_WIDTH + 1):
+                    rows = (line_width + term_width - 1) // term_width  # Ceiling division
+                    width_totals[term_width - 1] += rows * count
 
         # Store all width totals in summary array
         for total in width_totals:
