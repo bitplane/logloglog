@@ -16,6 +16,10 @@ make log
 
 ## TODO
 
+- [ ] Textual demo
+  - [x] stats in window
+  - [ ] slim demo down
+  - [ ] follow last line when at end
 - [ ] Async/non-blocking design
   - [ ] Make log processing async to avoid blocking
   - [ ] Support streaming updates

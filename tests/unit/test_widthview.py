@@ -249,3 +249,57 @@ def test_view_zero_width(simple_log):
     """Test that zero width doesn't cause division by zero."""
     view = simple_log.width(width=0)
     assert len(view) == 0  # Should have zero logical rows
+
+
+def test_line_at_negative_indexing(simple_log):
+    """Test line_at with negative indexing."""
+    view = simple_log.width(80)
+
+    # simple_log has 3 lines, so 3 rows at width 80
+    assert len(view) == 3
+
+    # Test negative indexing
+    line, offset = view.line_at(-1)  # Last row
+    assert line == 2  # Third line (0-indexed)
+    assert offset == 0  # No wrapping at width 80
+
+    line, offset = view.line_at(-2)  # Second to last
+    assert line == 1
+    assert offset == 0
+
+    line, offset = view.line_at(-3)  # First row
+    assert line == 0
+    assert offset == 0
+
+
+def test_line_at_out_of_bounds(simple_log):
+    """Test line_at with out of bounds access."""
+    view = simple_log.width(80)
+
+    # Test positive out of bounds
+    with pytest.raises(IndexError, match="Display row 999 out of range"):
+        view.line_at(999)
+
+    # Test negative out of bounds
+    with pytest.raises(IndexError, match="Display row -7 out of range"):
+        view.line_at(-10)  # -10 + 3 = -7, which is out of bounds for 3 rows
+
+
+def test_row_for_method(log_with_custom_content):
+    """Test row_for method to find display row for logical line."""
+    # Create content with known wrapping behavior
+    content = "Short\n" + "x" * 100 + "\nEnd"
+    log = log_with_custom_content(content)
+
+    view = log.width(20)  # 100 chars will wrap to 5 rows at width 20
+
+    # Line 0: "Short" - starts at row 0
+    assert view.row_for(0) == 0
+
+    # Line 1: 100 x's - starts at row 1 (after "Short")
+    assert view.row_for(1) == 1
+
+    # Line 2: "End" - starts at row 6 (after 1 + 5 rows)
+    assert view.row_for(2) == 6
+
+    log.close()

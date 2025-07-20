@@ -1,12 +1,22 @@
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
 from textual.geometry import Size
+from textual.message import Message
 from rich.segment import Segment
 from rich.markup import escape
 
 
 class LogWidget(ScrollView):
     """A scrollable widget to display log data."""
+
+    class LogUpdated(Message):
+        """Posted when log display updates (scroll, resize, etc)."""
+
+        def __init__(self, scroll_y: int, total_rows: int, width: int) -> None:
+            super().__init__()
+            self.scroll_y = scroll_y
+            self.total_rows = total_rows
+            self.width = width
 
     DEFAULT_CSS = """
     LogWidget {
@@ -19,6 +29,8 @@ class LogWidget(ScrollView):
         height: 100%;
     }
     """
+
+    can_focus = True
 
     def __init__(self, log_data, **kwargs):
         super().__init__(**kwargs)
@@ -59,6 +71,23 @@ class LogWidget(ScrollView):
         self.virtual_size = Size(width, len(self.log_view))
         self.current_width = width
         self.refresh()
+
+    def _post_log_updated(self):
+        """Post a LogUpdated message with current state."""
+        if self.log_view is not None:
+            self.post_message(
+                self.LogUpdated(scroll_y=int(self.scroll_y), total_rows=len(self.log_view), width=self.current_width)
+            )
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        """Called when scroll position changes."""
+        super().watch_scroll_y(old_value, new_value)
+        if round(old_value) != round(new_value):
+            self._post_log_updated()
+
+    def watch_virtual_size(self, old_size: Size, new_size: Size) -> None:
+        """Called when virtual (scrollable) size changes."""
+        self._post_log_updated()
 
     def render_line(self, y: int) -> Strip:
         """Render a single line of the log."""
