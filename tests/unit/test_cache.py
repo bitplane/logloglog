@@ -187,13 +187,15 @@ def test_cache_reuse_after_close_reopen(temp_cache_dir):
     # First open - should create cache
     cache = Cache(temp_cache_dir)
     log1 = LogLogLog(test_file, cache=cache)
-    cache_path1 = log1._index_path
+    cache_info1 = log1.get_cache_info()
+    cache_path1 = Path(cache_info1["cache_dir"])
     assert cache_path1.exists()
     log1.close()
 
     # Second open - should reuse same cache directory
     log2 = LogLogLog(test_file, cache=cache)
-    cache_path2 = log2._index_path
+    cache_info2 = log2.get_cache_info()
+    cache_path2 = Path(cache_info2["cache_dir"])
     log2.close()
 
     # Should be the same cache directory

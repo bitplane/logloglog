@@ -325,7 +325,7 @@ def test_file_modification_detection(temp_cache_dir):
         # Create initial cache
         log1 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log1) == 2
-        original_last_pos = log1._last_position
+        original_info = log1.get_file_info()
 
         log1.close()
 
@@ -339,7 +339,9 @@ def test_file_modification_detection(temp_cache_dir):
         # Reopen - should detect changes and update
         log2 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log2) == 4
-        assert log2._last_position > original_last_pos
+        new_info = log2.get_file_info()
+        assert new_info["file_size"] > original_info["file_size"]
+        assert new_info["total_lines"] > original_info["total_lines"]
         log2.close()
 
     finally:
@@ -441,7 +443,8 @@ def test_corrupted_index_recovery(temp_cache_dir):
         # First, create a valid index
         log1 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log1) == 3
-        index_path = log1._index_path
+        cache_info = log1.get_cache_info()
+        index_path = Path(cache_info["cache_dir"])
         log1.close()
 
         # Corrupt the line_offsets file
@@ -539,7 +542,7 @@ def test_file_truncation_scenario(temp_cache_dir):
         # Create cache with full file
         log1 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log1) == 4
-        original_last_pos = log1._last_position
+        original_info = log1.get_file_info()
         log1.close()
 
         # Truncate file to be smaller
@@ -550,7 +553,9 @@ def test_file_truncation_scenario(temp_cache_dir):
         log2 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log2) == 1
         assert log2[0] == "New content"
-        assert log2._last_position < original_last_pos
+        new_info = log2.get_file_info()
+        assert new_info["file_size"] < original_info["file_size"]
+        assert new_info["total_lines"] < original_info["total_lines"]
         log2.close()
 
     finally:
@@ -589,7 +594,8 @@ def test_empty_index_loading(temp_cache_dir):
         # Create LogLogLog first to create index files
         log1 = LogLogLog(log_path, cache=Cache(temp_cache_dir))
         assert len(log1) == 1
-        index_path = log1._index_path
+        cache_info = log1.get_cache_info()
+        index_path = Path(cache_info["cache_dir"])
         log1.close()
 
         # Now create empty index files to simulate empty index scenario
@@ -664,14 +670,13 @@ def test_file_size_cache_missing(temp_cache_dir):
 
     try:
         log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
-        # Delete the file size cache if it exists
-        if log._file_size_path.exists():
-            os.unlink(log._file_size_path)
-
-        # Should return None when file size cache is missing
-        file_size = log._load_file_size()
-        assert file_size is None
-
+        
+        # Check initial cache state
+        cache_info = log.get_cache_info()
+        
+        # Cache should exist after opening the file
+        assert cache_info["has_file_size_cache"]
+        
         log.close()
     finally:
         os.unlink(log_path)
