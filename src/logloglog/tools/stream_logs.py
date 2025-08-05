@@ -7,6 +7,7 @@ historical logs (sorted by creation time) and live log following.
 """
 
 import argparse
+import asyncio
 import gzip
 import signal
 import subprocess
@@ -152,7 +153,7 @@ def stream_historical_logs() -> None:
     print("", file=sys.stderr)
 
 
-def follow_live_logs(last_modified_minutes: int = 60) -> None:
+async def follow_live_logs(last_modified_minutes: int = 60) -> None:
     """
     Follow live log files using pure Python implementation.
 
@@ -170,10 +171,10 @@ def follow_live_logs(last_modified_minutes: int = 60) -> None:
         print(f"Will tail: {logfile}", file=sys.stderr)
 
     # Pure Python implementation of tail -F
-    tail_multiple_files(live_logs)
+    await tail_multiple_files(live_logs)
 
 
-def tail_multiple_files(filepaths: List[Path]) -> None:
+async def tail_multiple_files(filepaths: List[Path]) -> None:
     """
     Pure Python implementation of tail -F for multiple files.
 
@@ -236,7 +237,7 @@ def tail_multiple_files(filepaths: List[Path]) -> None:
                         del file_states[filepath]
 
             if not any_output:
-                time.sleep(0.1)  # Brief sleep when no new content
+                await asyncio.sleep(0.1)  # Brief sleep when no new content
 
     except KeyboardInterrupt:
         pass
@@ -260,7 +261,7 @@ def setup_signal_handlers() -> None:
     signal.signal(signal.SIGTERM, signal_handler)
 
 
-def main() -> None:
+async def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
         description="Stream system logs for logloglog",
@@ -298,11 +299,11 @@ Examples:
         if args.historical_only:
             stream_historical_logs()
         elif args.follow_only:
-            follow_live_logs(args.last_modified)
+            await follow_live_logs(args.last_modified)
         else:
             # Default: both historical then live (original behavior)
             stream_historical_logs()
-            follow_live_logs(args.last_modified)
+            await follow_live_logs(args.last_modified)
 
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
@@ -313,4 +314,4 @@ Examples:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

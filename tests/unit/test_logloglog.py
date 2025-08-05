@@ -670,13 +670,13 @@ def test_file_size_cache_missing(temp_cache_dir):
 
     try:
         log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
-        
+
         # Check initial cache state
         cache_info = log.get_cache_info()
-        
+
         # Cache should exist after opening the file
         assert cache_info["has_file_size_cache"]
-        
+
         log.close()
     finally:
         os.unlink(log_path)
@@ -733,6 +733,121 @@ def test_row_for_line(temp_cache_dir):
 
         row = log.row_for_line(2, 10)
         assert row == 5  # Third line starts after first two (1 + 4 rows)
+
+        log.close()
+    finally:
+        os.unlink(log_path)
+
+
+# Async tests for new async functionality
+
+
+@pytest.mark.asyncio
+async def test_aupdate_async_method(temp_cache_dir):
+    """Test async update method works correctly."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("Line 1\nLine 2\n")
+        log_path = f.name
+
+    try:
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        initial_len = len(log)
+        assert initial_len == 2
+
+        # Add more content to the file
+        with open(log_path, "a") as f:
+            f.write("Line 3\nLine 4\n")
+
+        # Use async update
+        await log.aupdate()
+
+        # Should detect new lines
+        assert len(log) == 4
+        assert log[2] == "Line 3"
+        assert log[3] == "Line 4"
+
+        log.close()
+    finally:
+        os.unlink(log_path)
+
+
+@pytest.mark.asyncio
+async def test_aupdate_with_large_file(temp_cache_dir):
+    """Test async update with larger file to test periodic yielding."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        # Write many lines to test yielding behavior
+        for i in range(2000):
+            f.write(f"Line {i}\n")
+        log_path = f.name
+
+    try:
+        # Create log
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+
+        # Should have processed all lines during init
+        assert len(log) == 2000
+        assert log[0] == "Line 0"
+        assert log[1999] == "Line 1999"
+
+        log.close()
+    finally:
+        os.unlink(log_path)
+
+
+@pytest.mark.asyncio
+async def test_aupdate_truncation_detection(temp_cache_dir):
+    """Test async update detects file truncation."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("Line 1\nLine 2\nLine 3\nLine 4\n")
+        log_path = f.name
+
+    try:
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        assert len(log) == 4
+
+        # Truncate the file
+        with open(log_path, "w") as f:
+            f.write("New line\n")
+
+        # Use async update - should detect truncation
+        await log.aupdate()
+
+        assert len(log) == 1
+        assert log[0] == "New line"
+
+        log.close()
+    finally:
+        os.unlink(log_path)
+
+
+@pytest.mark.asyncio
+async def test_async_width_calculation_in_thread(temp_cache_dir):
+    """Test that width calculation runs in thread during async update."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        # Write lines with unicode characters to test width calculation
+        f.write("café\n")  # Should be width 4
+        f.write("日本語\n")  # Should be width 6
+        f.write("normal text\n")  # Should be width 11
+        log_path = f.name
+
+    try:
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        assert len(log) == 3
+
+        # Add more unicode content
+        with open(log_path, "a") as f:
+            f.write("emoji: 😀\n")
+            f.write("complex: 👨‍👩‍👧‍👦\n")
+
+        # Use async update - width calculation should run in thread
+        await log.aupdate()
+
+        assert len(log) == 5
+        assert log[0] == "café"
+        assert log[1] == "日本語"
+        assert log[2] == "normal text"
+        assert log[3] == "emoji: 😀"
+        assert log[4] == "complex: 👨‍👩‍👧‍👦"
 
         log.close()
     finally:

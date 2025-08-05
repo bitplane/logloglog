@@ -9,7 +9,6 @@ from textual.widgets import Header
 
 from textual_window import Window, WindowBar, WindowSwitcher
 from logloglog.ui.textual import LogWidget
-from logloglog import LogLogLog
 
 
 class WindowDemo(App):
@@ -57,7 +56,7 @@ class WindowDemo(App):
         self.logger = logging.getLogger(__name__)
 
         self.log_file = Path("./logs/log.log.log")
-        self.log_data = LogLogLog(self.log_file)
+        self.log_data = None  # Will be created by widget
         self.current_width = 80  # Default width
 
         self.logger.info("Textual Window Demo app started")
@@ -76,7 +75,7 @@ class WindowDemo(App):
                 starting_vertical="middle",
                 start_open=True,
             ):
-                yield LogWidget(self.log_data, id="log_display")
+                yield LogWidget(self.log_file, id="log_display")
 
     def on_mount(self) -> None:
         """Called when app is mounted."""
@@ -95,7 +94,8 @@ class WindowDemo(App):
                 size_str = f"{file_size}B"
 
             # Get log info
-            total_lines = len(self.log_data)
+            log_widget = self.query_one("#log_display", LogWidget)
+            total_lines = len(log_widget.log_data) if log_widget.log_data else 0
 
             if total_lines > 0:
                 # Try to get current scroll position from LogWidget

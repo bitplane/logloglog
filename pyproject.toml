@@ -33,6 +33,7 @@ dev = [
     "logloglog[textual]",
     "pre-commit",
     "pytest",
+    "pytest-asyncio",
     "coverage",
     "pytest-cov",
     "build",
