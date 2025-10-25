@@ -104,11 +104,14 @@ class LogWidget(ScrollView):
 
     def set_width(self, width: int):
         """Update the view width and preserve scroll position."""
+        # Check if we're at bottom before update
+        was_at_bottom = self._at_bottom
+
         # Remember current scroll position as a logical line (only if width is changing)
         old_logical_line = None
         width_changed = self.current_width != width
 
-        if width_changed and self.log_view and self.current_width > 0 and len(self.log_view) > 0:
+        if width_changed and self.log_view and self.current_width > 0 and len(self.log_view) > 0 and not was_at_bottom:
             try:
                 current_row = int(self.scroll_y)
                 if current_row < len(self.log_view):
@@ -121,8 +124,12 @@ class LogWidget(ScrollView):
         self.virtual_size = Size(width, len(self.log_view))
         self.current_width = width
 
-        # Restore scroll position to same logical line only if width changed
-        if old_logical_line is not None and width_changed:
+        # If we were at bottom, stay at bottom
+        if was_at_bottom and self.log_view:
+            max_scroll = len(self.log_view) - self.size.height
+            self.scroll_to(y=max(0, max_scroll), animate=False)
+        # Otherwise restore scroll position to same logical line only if width changed
+        elif old_logical_line is not None and width_changed:
             try:
                 new_row = self.log_data.row_for_line(old_logical_line, width)
                 self.scroll_to(y=new_row, animate=False)
