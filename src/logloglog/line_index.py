@@ -85,11 +85,6 @@ class LineIndex:
         start_line = summary_idx * SUMMARY_INTERVAL
         end_line = start_line + SUMMARY_INTERVAL
 
-        # Find unique line widths in this block
-        unique_widths = set()
-        for line_idx in range(start_line, end_line):
-            unique_widths.add(self._line_widths[line_idx])
-
         # Count how many lines have each width
         width_counts = {}
         for line_idx in range(start_line, end_line):
@@ -105,13 +100,14 @@ class LineIndex:
                     width_totals[i] += count
             else:
                 # Calculate rows for each terminal width
+                # Ceiling division: (line_width + term_width - 1) // term_width
+                # This is always >= 1 when both operands are positive, so no max() needed
                 for term_width in range(1, MAX_WIDTH + 1):
-                    rows = max(1, (line_width + term_width - 1) // term_width)  # Ceiling division, min 1 row
+                    rows = (line_width + term_width - 1) // term_width
                     width_totals[term_width - 1] += rows * count
 
-        # Store all width totals in summary array
-        for total in width_totals:
-            self._summaries.append(total)
+        # Store all width totals in summary array (batch append for performance)
+        self._summaries.extend(width_totals)
 
     def get_line_position(self, line_no: int) -> int:
         """Get byte position of a line."""
@@ -152,7 +148,8 @@ class LineIndex:
         start_line = complete_summaries * SUMMARY_INTERVAL
         for line_idx in range(start_line, self._line_count):
             line_width = self._line_widths[line_idx]
-            rows = max(1, (line_width + width - 1) // width) if width > 0 else 1
+            # Ceiling division is always >= 1 for positive operands
+            rows = (line_width + width - 1) // width if width > 0 and line_width > 0 else 1
             total_rows += rows
 
         return total_rows
@@ -188,7 +185,7 @@ class LineIndex:
         start_line = summary_idx * SUMMARY_INTERVAL
         for line_idx in range(start_line, line_no):
             line_width = self._line_widths[line_idx]
-            rows = max(1, (line_width + width - 1) // width) if width > 0 else 1
+            rows = (line_width + width - 1) // width if width > 0 and line_width > 0 else 1
             display_row += rows
 
         return display_row
@@ -233,7 +230,7 @@ class LineIndex:
 
         for line_idx in range(start_line, end_line):
             line_width = self._line_widths[line_idx]
-            rows = max(1, (line_width + width - 1) // width) if width > 0 else 1
+            rows = (line_width + width - 1) // width if width > 0 and line_width > 0 else 1
 
             if current_row + rows > display_row:
                 # Found the line

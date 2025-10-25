@@ -371,7 +371,7 @@ class LogLogLog:
         # Open file handle for batch reading
         self.log_file.open()
         try:
-            while self.log_file.has_more_data():
+            while True:
                 # Get raw byte position before reading line
                 raw_pos = self.log_file.get_position()
                 line = self.log_file.read_line()
@@ -452,7 +452,7 @@ class LogLogLog:
         # Open file handle for batch reading
         await asyncio.to_thread(self.log_file.open)
         try:
-            while await self.log_file.ahas_more_data():
+            while True:
                 # Get raw byte position before reading line
                 raw_pos = self.log_file.get_position()
                 line = await self.log_file.aread_line()
