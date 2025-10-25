@@ -21,10 +21,10 @@ make log
 - [ ] Textual demo
   - [x] stats in window
   - [ ] slim demo down
-  - [ ] follow last line when at end
-- [ ] Async/non-blocking design
-  - [ ] Make log processing async to avoid blocking
-  - [ ] Support streaming updates
+  - [x] follow last line when at end
+- [x] Async/non-blocking design
+  - [x] Make log processing async to avoid blocking
+  - [x] Support streaming updates
 - [ ] Multiple display backends
 - [ ] Python logging integration
   - [ ] Direct logger handlers

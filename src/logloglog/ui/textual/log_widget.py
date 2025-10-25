@@ -64,11 +64,11 @@ class LogWidget(ScrollView):
 
     def on_mount(self):
         """Called when widget is mounted."""
-        logger.info(f"LogWidget on_mount called, needs_async_init={self._needs_async_init}")
+        logger.debug(f"LogWidget on_mount called, needs_async_init={self._needs_async_init}")
 
         if self._needs_async_init:
             # Start auto-refresh - it will create LogLogLog on first iteration
-            logger.info(f"Starting auto-refresh for async init of path: {self._log_path}")
+            logger.debug(f"Starting auto-refresh for async init of path: {self._log_path}")
             if self._auto_refresh_enabled:
                 self.start_auto_refresh()
         else:
@@ -188,7 +188,7 @@ class LogWidget(ScrollView):
     def start_auto_refresh(self, interval: float = 1.0):
         """Start background task to automatically refresh log data."""
         if self._refresh_task is None:
-            logger.info(f"Starting auto-refresh with {interval}s interval")
+            logger.debug(f"Starting auto-refresh with {interval}s interval")
             self._refresh_task = self.run_worker(self._auto_refresh_loop(interval))
 
     def stop_auto_refresh(self):
@@ -207,13 +207,13 @@ class LogWidget(ScrollView):
 
     async def _auto_refresh_loop(self, interval: float):
         """Background task that periodically checks for log updates."""
-        logger.info("Auto-refresh loop started")
+        logger.debug("Auto-refresh loop started")
         try:
-            logger.info(
+            logger.debug(
                 f"Loop conditions: auto_refresh_enabled={self._auto_refresh_enabled}, is_mounted={self.is_mounted}"
             )
             while self._auto_refresh_enabled and self.is_mounted:
-                logger.info("Auto-refresh loop iteration starting")
+                logger.debug("Auto-refresh loop iteration starting")
                 await self.arefresh_log_data()
 
                 # Update display after each refresh iteration
@@ -225,10 +225,10 @@ class LogWidget(ScrollView):
                     if self.current_width > 0:
                         self.call_later(self.set_width, self.current_width)
 
-                logger.info(f"Auto-refresh complete, sleeping for {interval}s")
+                logger.debug(f"Auto-refresh complete, sleeping for {interval}s")
                 await asyncio.sleep(interval)
         except asyncio.CancelledError:
-            logger.info("Auto-refresh loop cancelled")
+            logger.debug("Auto-refresh loop cancelled")
         except Exception as e:
             logger.error(f"Auto-refresh error: {e}")
             import traceback
@@ -237,24 +237,24 @@ class LogWidget(ScrollView):
 
     async def arefresh_log_data(self):
         """Async method to refresh log data without blocking the UI."""
-        logger.info("arefresh_log_data called")
+        logger.debug("arefresh_log_data called")
         try:
             # Create LogLogLog if needed (for deferred initialization)
             if self.log_data is None and self._needs_async_init and self._log_path:
                 from logloglog import LogLogLog
 
-                logger.info(f"Creating deferred LogLogLog for {self._log_path}")
+                logger.debug(f"Creating deferred LogLogLog for {self._log_path}")
                 self.log_data = LogLogLog(self._log_path, defer_indexing=True)
-                logger.info(f"LogLogLog created successfully, self.log_data = {self.log_data}")
-                logger.info(f"Type of self.log_data: {type(self.log_data)}")
-                logger.info(f"Bool of self.log_data: {bool(self.log_data)}")
+                logger.debug(f"LogLogLog created successfully, self.log_data = {self.log_data}")
+                logger.debug(f"Type of self.log_data: {type(self.log_data)}")
+                logger.debug(f"Bool of self.log_data: {bool(self.log_data)}")
 
             # Skip if still no log data object
             if self.log_data is None:
-                logger.info("arefresh_log_data: no log data object, skipping")
+                logger.debug("arefresh_log_data: no log data object, skipping")
                 return
 
-            logger.info(f"Proceeding with refresh, log_data exists: {type(self.log_data)}")
+            logger.debug(f"Proceeding with refresh, log_data exists: {type(self.log_data)}")
 
             # Create progress callback for UI updates during indexing
             async def on_progress():
@@ -264,12 +264,12 @@ class LogWidget(ScrollView):
             # Update log data with progress callback
             await self.log_data.aupdate(progress_callback=on_progress, progress_interval=0.016)
 
-            logger.info(f"Data update complete, LogLogLog has {len(self.log_data)} lines")
+            logger.debug(f"Data update complete, LogLogLog has {len(self.log_data)} lines")
 
             # Set initial width if not set yet
             if self.current_width == 0 and self.size.width > 0:
                 self.current_width = self.size.width
-                logger.info(f"Setting initial width to {self.current_width}")
+                logger.debug(f"Setting initial width to {self.current_width}")
 
         except Exception as e:
             # Log error but don't crash
