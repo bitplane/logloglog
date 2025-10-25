@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
+import argparse
 import logging
 from pathlib import Path
+
+# Setup logging BEFORE any other imports that might log
+demo_log_file = Path("./logs/textual_demo.log")
+demo_log_file.parent.mkdir(exist_ok=True)
+logging.basicConfig(
+    filename=demo_log_file,
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    filemode="a",
+)
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -39,27 +50,16 @@ class WindowDemo(App):
         Binding("f1", "toggle_switcher", "Window Switcher", key_display="F1"),
     ]
 
-    def __init__(self) -> None:
+    def __init__(self, log_file: Path) -> None:
         super().__init__()
         self.title = "Textual-Window Test App"
 
-        # Setup logging
-        log_file = Path("./logs/textual_demo.log")
-        log_file.parent.mkdir(exist_ok=True)
-
-        logging.basicConfig(
-            filename=log_file,
-            level=logging.INFO,
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            filemode="a",
-        )
         self.logger = logging.getLogger(__name__)
-
-        self.log_file = Path("./logs/log.log.log")
+        self.log_file = log_file
         self.log_data = None  # Will be created by widget
         self.current_width = 80  # Default width
 
-        self.logger.info("Textual Window Demo app started")
+        self.logger.info(f"Textual Window Demo app started with file: {self.log_file}")
 
     def compose(self) -> ComposeResult:
         yield WindowSwitcher()
@@ -140,7 +140,21 @@ class WindowDemo(App):
 
 
 def run_demo() -> None:
-    WindowDemo().run()
+    parser = argparse.ArgumentParser(description="Textual demo for logloglog")
+    parser.add_argument(
+        "log_file",
+        nargs="?",
+        default="./logs/log.log.log",
+        help="Path to log file to display (default: ./logs/log.log.log)",
+    )
+    args = parser.parse_args()
+
+    log_file = Path(args.log_file)
+    if not log_file.exists():
+        print(f"Error: Log file not found: {log_file}")
+        return
+
+    WindowDemo(log_file).run()
 
 
 if __name__ == "__main__":

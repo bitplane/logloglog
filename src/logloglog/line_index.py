@@ -124,7 +124,15 @@ class LineIndex:
         """Get byte position of a line."""
         if line_no < 0 or line_no >= self._line_count:
             raise IndexError(f"Line {line_no} out of range")
-        return self._line_positions[line_no]
+
+        # Check if it's in the flushed data or pending batch
+        flushed_count = len(self._line_positions)
+        if line_no < flushed_count:
+            return self._line_positions[line_no]
+        else:
+            # It's in the pending batch
+            pending_idx = line_no - flushed_count
+            return self._pending_positions[pending_idx]
 
     def get_line_width(self, line_no: int) -> int:
         """Get display width of a line."""

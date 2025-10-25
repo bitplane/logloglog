@@ -5,6 +5,7 @@ from textual.scroll_view import ScrollView
 from textual.strip import Strip
 from textual.geometry import Size
 from textual.message import Message
+from textual.binding import Binding
 from rich.segment import Segment
 from rich.markup import escape
 
@@ -35,6 +36,11 @@ class LogWidget(ScrollView):
         height: 100%;
     }
     """
+
+    BINDINGS = [
+        Binding("ctrl+home", "scroll_home", "Jump to start", show=False),
+        Binding("ctrl+end", "scroll_end", "Jump to end", show=False),
+    ]
 
     can_focus = True
 
@@ -273,3 +279,13 @@ class LogWidget(ScrollView):
     def on_unmount(self):
         """Called when widget is unmounted - cleanup background tasks."""
         self.stop_auto_refresh()
+
+    def action_scroll_home(self):
+        """Jump to the start of the log."""
+        self.scroll_to(y=0, animate=False)
+
+    def action_scroll_end(self):
+        """Jump to the end of the log."""
+        if self.log_view:
+            max_scroll = len(self.log_view) - self.size.height
+            self.scroll_to(y=max(0, max_scroll), animate=False)
