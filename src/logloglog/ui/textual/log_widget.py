@@ -207,12 +207,8 @@ class LogWidget(ScrollView):
 
             logger.info(f"Proceeding with refresh, log_data exists: {type(self.log_data)}")
 
-            # Check if log data has async update capability
-            if hasattr(self.log_data, "aupdate"):
-                await self.log_data.aupdate()
-            else:
-                # Fall back to sync update in a thread
-                await asyncio.to_thread(self.log_data.update)
+            # Update log data
+            await self.log_data.aupdate()
 
             logger.info(f"Data update complete, LogLogLog has {len(self.log_data)} lines")
 
@@ -232,12 +228,8 @@ class LogWidget(ScrollView):
 
     async def aset_width(self, width: int):
         """Async version of set_width for non-blocking width changes."""
-        if hasattr(self.log_data, "width"):
-            # Run width calculation in thread to avoid blocking
-            self.log_view = await asyncio.to_thread(self.log_data.width, width)
-        else:
-            self.log_view = self.log_data.width(width)
-
+        # Run width calculation in thread to avoid blocking
+        self.log_view = await asyncio.to_thread(self.log_data.width, width)
         self.virtual_size = Size(width, len(self.log_view))
         self.current_width = width
         self.refresh()

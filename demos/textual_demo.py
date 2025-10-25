@@ -101,11 +101,9 @@ class WindowDemo(App):
                 # Try to get current scroll position from LogWidget
                 try:
                     log_widget = self.query_one("#log_display")
-                    current_row = int(log_widget.scroll_y) if hasattr(log_widget, "scroll_y") else 0
-                    total_rows = (
-                        len(log_widget.log_view) if hasattr(log_widget, "log_view") and log_widget.log_view else 0
-                    )
-                    width = log_widget.current_width if hasattr(log_widget, "current_width") else 80
+                    current_row = int(log_widget.scroll_y)
+                    total_rows = len(log_widget.log_view) if log_widget.log_view else 0
+                    width = log_widget.current_width
                     return f"{current_row}/{total_rows} [{width}] | {size_str}"
                 except Exception:
                     return f"0/0 [80] | {size_str}"
