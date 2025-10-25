@@ -3,16 +3,6 @@ import argparse
 import logging
 from pathlib import Path
 
-# Setup logging BEFORE any other imports that might log
-demo_log_file = Path("./logs/textual_demo.log")
-demo_log_file.parent.mkdir(exist_ok=True)
-logging.basicConfig(
-    filename=demo_log_file,
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    filemode="a",
-)
-
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container
@@ -20,6 +10,17 @@ from textual.widgets import Header
 
 from textual_window import Window, WindowBar, WindowSwitcher
 from logloglog.ui.textual import LogWidget
+
+# Setup logging
+demo_log_file = Path("./logs/textual_demo.log")
+demo_log_file.parent.mkdir(exist_ok=True)
+
+logging.basicConfig(
+    filename=demo_log_file,
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    filemode="a",
+)
 
 
 class WindowDemo(App):
@@ -52,7 +53,7 @@ class WindowDemo(App):
 
     def __init__(self, log_file: Path) -> None:
         super().__init__()
-        self.title = "Textual-Window Test App"
+        self.title = "Log, Log, Log!"
 
         self.logger = logging.getLogger(__name__)
         self.log_file = log_file

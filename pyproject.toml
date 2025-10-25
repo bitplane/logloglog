@@ -1,7 +1,7 @@
 [project]
 name = "logloglog"
 description = "Efficient scrollback indexing for large log files with terminal word wrapping"
-version = "0.0.1"
+version = "0.1.0"
 authors = [
     { name = "Gareth Davidson", email = "gaz@bitplane.net" }
 ]
@@ -38,7 +38,8 @@ dev = [
     "pytest-cov",
     "build",
     "twine",
-    "ruff"
+    "ruff",
+    "pydoc-markdown"
 ]
 textual = [
     "textual",

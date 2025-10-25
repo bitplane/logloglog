@@ -9,3 +9,4 @@ coverage.json
 *.prof
 .log.pid
 logs
+docs/pydoc

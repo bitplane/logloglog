@@ -34,7 +34,3 @@ def configure_logging(level=logging.INFO):
         # Remove existing handlers to avoid duplicates
         logger.handlers.clear()
         logger.addHandler(handler)
-
-
-# Auto-configure with DEBUG level for performance monitoring
-configure_logging(logging.DEBUG)
