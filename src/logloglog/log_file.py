@@ -55,21 +55,11 @@ class LogFile:
             The next line without trailing newline, or None if no more data.
         """
         try:
-            # Use open file handle if available, otherwise open temporarily
-            if self._file_handle is not None:
-                line_bytes = self._file_handle.readline()
-                if line_bytes:
-                    # Track position without syscall - we know it's current + bytes read
-                    self._read_position += len(line_bytes)
-                    return line_bytes.decode("utf-8", errors="replace").rstrip("\r\n")
-            else:
-                # Fallback for when no batch session is open
-                with open(self.path, "rb") as f:
-                    f.seek(self._read_position)
-                    line_bytes = f.readline()
-                    if line_bytes:
-                        self._read_position += len(line_bytes)
-                        return line_bytes.decode("utf-8", errors="replace").rstrip("\r\n")
+            line_bytes = self._file_handle.readline()
+            if line_bytes:
+                # Track position without syscall - we know it's current + bytes read
+                self._read_position += len(line_bytes)
+                return line_bytes.decode("utf-8", errors="replace").rstrip("\r\n")
         except (IOError, OSError):
             pass
         return None

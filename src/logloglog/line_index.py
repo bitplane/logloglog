@@ -130,7 +130,15 @@ class LineIndex:
         """Get display width of a line."""
         if line_no < 0 or line_no >= self._line_count:
             raise IndexError(f"Line {line_no} out of range")
-        return self._line_widths[line_no]
+
+        # Check if it's in the flushed data or pending batch
+        flushed_count = len(self._line_widths)
+        if line_no < flushed_count:
+            return self._line_widths[line_no]
+        else:
+            # It's in the pending batch
+            pending_idx = line_no - flushed_count
+            return self._pending_widths[pending_idx]
 
     def get_total_display_rows(self, width: int) -> int:
         """
@@ -158,7 +166,7 @@ class LineIndex:
         # Add remaining lines not in a summary
         start_line = complete_summaries * SUMMARY_INTERVAL
         for line_idx in range(start_line, self._line_count):
-            line_width = self._line_widths[line_idx]
+            line_width = self.get_line_width(line_idx)
             # Ceiling division is always >= 1 for positive operands
             rows = (line_width + width - 1) // width if width > 0 and line_width > 0 else 1
             total_rows += rows
@@ -195,7 +203,7 @@ class LineIndex:
         # Add individual lines from last summary to target line
         start_line = summary_idx * SUMMARY_INTERVAL
         for line_idx in range(start_line, line_no):
-            line_width = self._line_widths[line_idx]
+            line_width = self.get_line_width(line_idx)
             rows = (line_width + width - 1) // width if width > 0 and line_width > 0 else 1
             display_row += rows
 
@@ -240,7 +248,7 @@ class LineIndex:
         end_line = min(start_line + SUMMARY_INTERVAL, self._line_count)
 
         for line_idx in range(start_line, end_line):
-            line_width = self._line_widths[line_idx]
+            line_width = self.get_line_width(line_idx)
             rows = (line_width + width - 1) // width if width > 0 and line_width > 0 else 1
 
             if current_row + rows > display_row:

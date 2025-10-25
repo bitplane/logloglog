@@ -73,6 +73,7 @@ class LogLogLog:
             self.path = Path(path).resolve()  # Resolve symlinks
             # Use append mode to allow both reading existing content and writing new content
             self.log_file = LogFile(self.path, mode="a")
+            self.log_file.open()  # Keep file open for the lifetime of LogLogLog
 
         self.get_width = get_width or default_get_width
         self.split_lines = split_lines or default_split_lines
@@ -368,30 +369,25 @@ class LogLogLog:
         width_count = 0
         process_start = time.time()
 
-        # Open file handle for batch reading
-        self.log_file.open()
-        try:
-            while True:
-                # Get raw byte position before reading line
-                raw_pos = self.log_file.get_position()
-                line = self.log_file.read_line()
+        # File is already open from __init__
+        while True:
+            # Get raw byte position before reading line
+            raw_pos = self.log_file.get_position()
+            line = self.log_file.read_line()
 
-                if line is None:
-                    break  # EOF
+            if line is None:
+                break  # EOF
 
-                # Calculate width and add to index
-                width = self.get_width(line)
-                self._line_index.append_line(raw_pos, width)
-                width_count += 1
+            # Calculate width and add to index
+            width = self.get_width(line)
+            self._line_index.append_line(raw_pos, width)
+            width_count += 1
 
-                # Progress logging for large files
-                if width_count % 100000 == 0:
-                    elapsed = time.time() - process_start
-                    rate = width_count / elapsed if elapsed > 0 else 0
-                    logger.info(f"Processed {width_count:,} lines in {elapsed:.1f}s ({rate:.0f} lines/sec)")
-        finally:
-            # Always close the file handle
-            self.log_file.close()
+            # Progress logging for large files
+            if width_count % 100000 == 0:
+                elapsed = time.time() - process_start
+                rate = width_count / elapsed if elapsed > 0 else 0
+                logger.info(f"Processed {width_count:,} lines in {elapsed:.1f}s ({rate:.0f} lines/sec)")
 
         if width_count > 0:
             logger.debug(f"Stream processing took {time.time() - stream_start:.3f}s for {width_count:,} lines")
@@ -449,42 +445,37 @@ class LogLogLog:
         process_start = time.time()
         last_progress_time = time.time()
 
-        # Open file handle for batch reading
-        await asyncio.to_thread(self.log_file.open)
-        try:
-            while True:
-                # Get raw byte position before reading line
-                raw_pos = self.log_file.get_position()
-                line = await self.log_file.aread_line()
+        # File is already open from __init__
+        while True:
+            # Get raw byte position before reading line
+            raw_pos = self.log_file.get_position()
+            line = await self.log_file.aread_line()
 
-                if line is None:
-                    break  # EOF
+            if line is None:
+                break  # EOF
 
-                # Calculate width and add to index (run width calculation in thread for CPU-bound work)
-                width = await asyncio.to_thread(self.get_width, line)
-                self._line_index.append_line(raw_pos, width)
-                width_count += 1
+            # Calculate width and add to index (run width calculation in thread for CPU-bound work)
+            width = await asyncio.to_thread(self.get_width, line)
+            self._line_index.append_line(raw_pos, width)
+            width_count += 1
 
-                # Progress callback at interval
-                current_time = time.time()
-                if progress_callback and (current_time - last_progress_time) >= progress_interval:
-                    await progress_callback()
-                    last_progress_time = current_time
+            # Progress callback at interval
+            current_time = time.time()
+            if progress_callback and (current_time - last_progress_time) >= progress_interval:
+                await progress_callback()
+                last_progress_time = current_time
 
-                # Progress logging for large files
-                if width_count % 100000 == 0:
-                    elapsed = time.time() - process_start
-                    rate = width_count / elapsed if elapsed > 0 else 0
-                    logger.info(f"Processed {width_count:,} lines in {elapsed:.1f}s ({rate:.0f} lines/sec)")
-                    # Yield control to allow other tasks to run
-                    await asyncio.sleep(0)
+            # Progress logging for large files
+            if width_count % 100000 == 0:
+                elapsed = time.time() - process_start
+                rate = width_count / elapsed if elapsed > 0 else 0
+                logger.info(f"Processed {width_count:,} lines in {elapsed:.1f}s ({rate:.0f} lines/sec)")
+                # Yield control to allow other tasks to run
+                await asyncio.sleep(0)
 
-                # Yield control periodically for responsiveness
-                if width_count % 1000 == 0:
-                    await asyncio.sleep(0)
-        finally:
-            # Always close the file handle
-            await asyncio.to_thread(self.log_file.close)
+            # Yield control periodically for responsiveness
+            if width_count % 1000 == 0:
+                await asyncio.sleep(0)
 
         if width_count > 0:
             logger.debug(f"Stream processing took {time.time() - stream_start:.3f}s for {width_count:,} lines")
