@@ -249,7 +249,7 @@ class LogWidget(ScrollView):
                     self.call_later(self.set_width, self.current_width)
 
             # Update log data with progress callback
-            await self.log_data.aupdate(progress_callback=on_progress, progress_interval=0.1)
+            await self.log_data.aupdate(progress_callback=on_progress, progress_interval=0.016)
 
             logger.info(f"Data update complete, LogLogLog has {len(self.log_data)} lines")
 

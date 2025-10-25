@@ -414,6 +414,38 @@ class LogLogLog:
             # Reset position to start over
             self.log_file.seek_to(0)
 
+    def _process_lines_sync(self, time_budget: float) -> int:
+        """
+        Process lines synchronously for a time budget.
+
+        Args:
+            time_budget: Maximum time in seconds to spend processing
+
+        Returns:
+            Number of lines processed
+        """
+        start_time = time.time()
+        lines_processed = 0
+
+        while True:
+            # Check time budget
+            if time.time() - start_time >= time_budget:
+                break
+
+            # Get raw byte position before reading line
+            raw_pos = self.log_file.get_position()
+            line = self.log_file.read_line()
+
+            if line is None:
+                break  # EOF
+
+            # Calculate width and add to index
+            width = self.get_width(line)
+            self._line_index.append_line(raw_pos, width)
+            lines_processed += 1
+
+        return lines_processed
+
     async def aupdate(self, progress_callback=None, progress_interval=0.1):
         """Async version of update() method for non-blocking file processing.
 
@@ -439,46 +471,38 @@ class LogLogLog:
 
         # Stream process new content instead of reading entire file into RAM
         stream_start = time.time()
-
-        # Process line by line to avoid loading huge files into memory
-        width_count = 0
+        total_lines = 0
         process_start = time.time()
-        last_progress_time = time.time()
+
+        # Use progress_interval as our time budget for each processing chunk
+        time_budget = progress_interval
 
         # File is already open from __init__
         while True:
-            # Get raw byte position before reading line
-            raw_pos = self.log_file.get_position()
-            line = await self.log_file.aread_line()
+            # Process a chunk of lines synchronously (blocking, but time-boxed)
+            lines_processed = self._process_lines_sync(time_budget)
+            total_lines += lines_processed
 
-            if line is None:
+            if lines_processed == 0:
                 break  # EOF
 
-            # Calculate width and add to index (run width calculation in thread for CPU-bound work)
-            width = await asyncio.to_thread(self.get_width, line)
-            self._line_index.append_line(raw_pos, width)
-            width_count += 1
-
-            # Progress callback at interval
-            current_time = time.time()
-            if progress_callback and (current_time - last_progress_time) >= progress_interval:
-                await progress_callback()
-                last_progress_time = current_time
-
             # Progress logging for large files
-            if width_count % 100000 == 0:
+            if total_lines % 100000 == 0:
                 elapsed = time.time() - process_start
-                rate = width_count / elapsed if elapsed > 0 else 0
-                logger.info(f"Processed {width_count:,} lines in {elapsed:.1f}s ({rate:.0f} lines/sec)")
-                # Yield control to allow other tasks to run
-                await asyncio.sleep(0)
+                rate = total_lines / elapsed if elapsed > 0 else 0
+                logger.info(f"Processed {total_lines:,} lines in {elapsed:.1f}s ({rate:.0f} lines/sec)")
 
-            # Yield control periodically for responsiveness
-            if width_count % 1000 == 0:
-                await asyncio.sleep(0)
+            # Update UI after each chunk
+            if progress_callback:
+                await progress_callback()
 
-        if width_count > 0:
-            logger.debug(f"Stream processing took {time.time() - stream_start:.3f}s for {width_count:,} lines")
+            # Yield control to event loop
+            await asyncio.sleep(0)
+
+        if total_lines > 0:
+            elapsed = time.time() - stream_start
+            rate = total_lines / elapsed if elapsed > 0 else 0
+            logger.debug(f"Stream processing took {elapsed:.3f}s for {total_lines:,} lines ({rate:.0f} lines/sec)")
 
             # No tree update needed - summaries are created automatically during append
             # LineIndex handles flushing internally
