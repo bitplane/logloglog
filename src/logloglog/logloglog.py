@@ -418,13 +418,21 @@ class LogLogLog:
             # Reset position to start over
             self.log_file.seek_to(0)
 
-    async def aupdate(self):
-        """Async version of update() method for non-blocking file processing."""
+    async def aupdate(self, progress_callback=None, progress_interval=0.1):
+        """Async version of update() method for non-blocking file processing.
+
+        Args:
+            progress_callback: Optional async callback called periodically during indexing
+            progress_interval: Seconds between progress callbacks (default 0.1)
+        """
         start_time = time.time()
 
         # Initialize if this is a deferred instance
         if self._file_stat is None:
             await self._initialize_deferred()
+            # Call progress callback after initialization to show existing lines
+            if progress_callback:
+                await progress_callback()
 
         # Check if file has grown (use async methods)
         current_size = await self.log_file.aget_size()
@@ -439,6 +447,7 @@ class LogLogLog:
         # Process line by line to avoid loading huge files into memory
         width_count = 0
         process_start = time.time()
+        last_progress_time = time.time()
 
         # Open file handle for batch reading
         await asyncio.to_thread(self.log_file.open)
@@ -455,6 +464,12 @@ class LogLogLog:
                 width = await asyncio.to_thread(self.get_width, line)
                 self._line_index.append_line(raw_pos, width)
                 width_count += 1
+
+                # Progress callback at interval
+                current_time = time.time()
+                if progress_callback and (current_time - last_progress_time) >= progress_interval:
+                    await progress_callback()
+                    last_progress_time = current_time
 
                 # Progress logging for large files
                 if width_count % 100000 == 0:

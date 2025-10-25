@@ -152,6 +152,9 @@ class LogFile:
             position: Byte position to seek to
         """
         self._read_position = max(0, position)
+        # If file handle is open, seek it too
+        if self._file_handle is not None:
+            self._file_handle.seek(self._read_position)
 
     def get_position(self) -> int:
         """

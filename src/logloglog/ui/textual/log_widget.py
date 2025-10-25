@@ -45,6 +45,7 @@ class LogWidget(ScrollView):
         self.current_width = 0
         self._refresh_task = None
         self._auto_refresh_enabled = True
+        self._at_bottom = True  # Track if we're scrolled to the bottom
 
         # Handle both LogLogLog instances and file paths
         if isinstance(log_data_or_path, (str, Path)):
@@ -96,9 +97,32 @@ class LogWidget(ScrollView):
                 self.set_width(event.size.width)
 
     def set_width(self, width: int):
+        """Update the view width and preserve scroll position."""
+        # Remember current scroll position as a logical line (only if width is changing)
+        old_logical_line = None
+        width_changed = self.current_width != width
+
+        if width_changed and self.log_view and self.current_width > 0 and len(self.log_view) > 0:
+            try:
+                current_row = int(self.scroll_y)
+                if current_row < len(self.log_view):
+                    old_logical_line, _ = self.log_data.line_at_row(current_row, self.current_width)
+            except (IndexError, Exception):
+                pass  # If something fails, just don't preserve position
+
+        # Update the view
         self.log_view = self.log_data.width(width)
         self.virtual_size = Size(width, len(self.log_view))
         self.current_width = width
+
+        # Restore scroll position to same logical line only if width changed
+        if old_logical_line is not None and width_changed:
+            try:
+                new_row = self.log_data.row_for_line(old_logical_line, width)
+                self.scroll_to(y=new_row, animate=False)
+            except (IndexError, Exception):
+                pass  # If we can't restore, just leave it
+
         self.refresh()
 
     def _post_log_updated(self):
@@ -112,6 +136,10 @@ class LogWidget(ScrollView):
         """Called when scroll position changes."""
         super().watch_scroll_y(old_value, new_value)
         if round(old_value) != round(new_value):
+            # Check if we're at the bottom
+            if self.log_view:
+                max_scroll = len(self.log_view) - self.size.height
+                self._at_bottom = new_value >= max_scroll - 1  # Within 1 row of bottom
             self._post_log_updated()
 
     def watch_virtual_size(self, old_size: Size, new_size: Size) -> None:
@@ -149,8 +177,6 @@ class LogWidget(ScrollView):
         if self._refresh_task is None:
             logger.info(f"Starting auto-refresh with {interval}s interval")
             self._refresh_task = self.run_worker(self._auto_refresh_loop(interval))
-            # Also start a timer to update the UI periodically
-            self.set_timer(0.5, self._update_display, name="display_update")
 
     def stop_auto_refresh(self):
         """Stop the background refresh task."""
@@ -176,6 +202,16 @@ class LogWidget(ScrollView):
             while self._auto_refresh_enabled and self.is_mounted:
                 logger.info("Auto-refresh loop iteration starting")
                 await self.arefresh_log_data()
+
+                # Update display after each refresh iteration
+                if self.log_data is not None:
+                    # Set width if not set yet
+                    if self.current_width == 0 and self.size.width > 0:
+                        self.current_width = self.size.width
+
+                    if self.current_width > 0:
+                        self.call_later(self.set_width, self.current_width)
+
                 logger.info(f"Auto-refresh complete, sleeping for {interval}s")
                 await asyncio.sleep(interval)
         except asyncio.CancelledError:
@@ -207,8 +243,13 @@ class LogWidget(ScrollView):
 
             logger.info(f"Proceeding with refresh, log_data exists: {type(self.log_data)}")
 
-            # Update log data
-            await self.log_data.aupdate()
+            # Create progress callback for UI updates during indexing
+            async def on_progress():
+                if self.current_width > 0:
+                    self.call_later(self.set_width, self.current_width)
+
+            # Update log data with progress callback
+            await self.log_data.aupdate(progress_callback=on_progress, progress_interval=0.1)
 
             logger.info(f"Data update complete, LogLogLog has {len(self.log_data)} lines")
 
@@ -216,11 +257,6 @@ class LogWidget(ScrollView):
             if self.current_width == 0 and self.size.width > 0:
                 self.current_width = self.size.width
                 logger.info(f"Setting initial width to {self.current_width}")
-
-            # Update the view if we have a width set
-            if self.current_width > 0:
-                # Just call set_width to trigger the same update that works on resize
-                self.call_from_thread(lambda: self.set_width(self.current_width))
 
         except Exception as e:
             # Log error but don't crash
@@ -233,14 +269,6 @@ class LogWidget(ScrollView):
         self.virtual_size = Size(width, len(self.log_view))
         self.current_width = width
         self.refresh()
-
-    def _update_display(self):
-        """Update the display - runs on main thread via timer."""
-        if self.log_data and self.current_width > 0:
-            # Call set_width to update the view and refresh
-            self.set_width(self.current_width)
-            # Reschedule the timer
-            self.set_timer(0.5, self._update_display, name="display_update")
 
     def on_unmount(self):
         """Called when widget is unmounted - cleanup background tasks."""
