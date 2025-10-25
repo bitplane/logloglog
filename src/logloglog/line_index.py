@@ -29,6 +29,9 @@ class LineIndex:
         self._line_widths = None
         self._summaries = None
         self._line_count = 0
+        self._current_block_width_counts = {}  # Track widths in current 1000-line block
+        self._pending_positions = []  # Batch positions for extend()
+        self._pending_widths = []  # Batch widths for extend()
 
     def open(self, create: bool = False):
         """Open index files."""
@@ -50,6 +53,9 @@ class LineIndex:
 
     def close(self):
         """Close all index files."""
+        # Flush any pending data before closing
+        self._flush_pending()
+
         if self._line_positions:
             self._line_positions.close()
             self._line_positions = None
@@ -71,29 +77,34 @@ class LineIndex:
         # Cap width at uint16 max
         width = min(width, 65535)
 
-        self._line_positions.append(position)
-        self._line_widths.append(width)
+        # Batch in memory
+        self._pending_positions.append(position)
+        self._pending_widths.append(width)
         self._line_count += 1
 
-        # Check if we need to create a summary
+        # Track width for current block
+        self._current_block_width_counts[width] = self._current_block_width_counts.get(width, 0) + 1
+
+        # Check if we need to flush and store a summary
         if self._line_count % SUMMARY_INTERVAL == 0:
-            self._create_summary()
+            self._flush_pending()
+            self._store_summary()
+            self._current_block_width_counts.clear()
 
-    def _create_summary(self):
-        """Create a summary for the most recent SUMMARY_INTERVAL lines."""
-        summary_idx = (self._line_count // SUMMARY_INTERVAL) - 1
-        start_line = summary_idx * SUMMARY_INTERVAL
-        end_line = start_line + SUMMARY_INTERVAL
+    def _flush_pending(self):
+        """Flush pending positions and widths to disk."""
+        if self._pending_positions:
+            self._line_positions.extend(self._pending_positions)
+            self._pending_positions.clear()
+        if self._pending_widths:
+            self._line_widths.extend(self._pending_widths)
+            self._pending_widths.clear()
 
-        # Count how many lines have each width
-        width_counts = {}
-        for line_idx in range(start_line, end_line):
-            line_width = self._line_widths[line_idx]
-            width_counts[line_width] = width_counts.get(line_width, 0) + 1
-
+    def _store_summary(self):
+        """Store summary using already-tracked width counts."""
         # Calculate totals for each terminal width
         width_totals = [0] * MAX_WIDTH
-        for line_width, count in width_counts.items():
+        for line_width, count in self._current_block_width_counts.items():
             if line_width == 0:
                 # Empty lines always take 1 row regardless of terminal width
                 for i in range(MAX_WIDTH):
@@ -101,7 +112,7 @@ class LineIndex:
             else:
                 # Calculate rows for each terminal width
                 # Ceiling division: (line_width + term_width - 1) // term_width
-                # This is always >= 1 when both operands are positive, so no max() needed
+                # This is always >= 1 when both operands are positive
                 for term_width in range(1, MAX_WIDTH + 1):
                     rows = (line_width + term_width - 1) // term_width
                     width_totals[term_width - 1] += rows * count

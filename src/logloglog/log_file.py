@@ -59,7 +59,8 @@ class LogFile:
             if self._file_handle is not None:
                 line_bytes = self._file_handle.readline()
                 if line_bytes:
-                    self._read_position = self._file_handle.tell()
+                    # Track position without syscall - we know it's current + bytes read
+                    self._read_position += len(line_bytes)
                     return line_bytes.decode("utf-8", errors="replace").rstrip("\r\n")
             else:
                 # Fallback for when no batch session is open
@@ -67,7 +68,7 @@ class LogFile:
                     f.seek(self._read_position)
                     line_bytes = f.readline()
                     if line_bytes:
-                        self._read_position = f.tell()
+                        self._read_position += len(line_bytes)
                         return line_bytes.decode("utf-8", errors="replace").rstrip("\r\n")
         except (IOError, OSError):
             pass
