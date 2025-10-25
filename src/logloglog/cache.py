@@ -2,6 +2,7 @@
 
 import os
 import hashlib
+import shutil
 import tempfile
 from pathlib import Path
 import platformdirs
@@ -74,17 +75,11 @@ class Cache:
                     target = symlink_path.resolve()
                     if not target.exists():
                         # Original file is gone, remove cache directory
-                        import shutil
-
                         shutil.rmtree(cache_subdir)
                 except (OSError, FileNotFoundError):
                     # Symlink is broken, remove cache directory
-                    import shutil
-
                     shutil.rmtree(cache_subdir)
             else:
                 # No symlink found, directory is orphaned
-                import shutil
-
                 shutil.rmtree(cache_subdir)
             # TODO: Add inode-based cleanup for more robust file tracking

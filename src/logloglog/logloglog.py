@@ -94,6 +94,60 @@ class LogLogLog:
         if not defer_indexing:
             self._open()
 
+    def _check_index_files_exist(self) -> bool:
+        """Check if all index files exist."""
+        return (
+            (self._index_path / "positions.dat").exists()
+            and (self._index_path / "widths.dat").exists()
+            and (self._index_path / "summaries.dat").exists()
+            and self._file_size_path.exists()
+        )
+
+    def _try_load_existing_index(self) -> bool:
+        """
+        Try to load existing index.
+
+        Returns:
+            True if index loaded successfully, False if needs rebuild
+        """
+        try:
+            load_start = time.time()
+            self._line_index.open(create=False)
+
+            # Calculate last_position from last line offset
+            if len(self._line_index) > 0:
+                last_offset = self._line_index.get_line_position(len(self._line_index) - 1)
+                self.log_file.seek_to(last_offset)
+                self.log_file.read_line()  # Read to end of last line
+                last_position = self.log_file.get_position()
+                logger.debug(f"Calculated last_position: {last_position:,} from offset {last_offset:,}")
+            else:
+                last_position = 0
+                logger.debug("Empty line index, setting last_position to 0")
+
+            # Update LogFile position
+            self.log_file.seek_to(last_position)
+
+            logger.debug(f"Index load took {time.time() - load_start:.3f}s - last_pos: {last_position:,}")
+            logger.debug(f"Loaded {len(self._line_index):,} lines")
+
+            # Check if file size has changed (shrunk = truncated)
+            cached_file_size = self._load_file_size()
+            current_file_size = self._file_stat.st_size
+            if cached_file_size is not None and current_file_size < cached_file_size:
+                logger.info(
+                    f"File shrunk from {cached_file_size:,} to {current_file_size:,} bytes - invalidating cache"
+                )
+                raise Exception("File truncated")
+
+            return True
+
+        except Exception as e:
+            logger.exception(f"Failed to load existing index: {e}, rebuilding")
+            # Close any partially opened components
+            self._line_index.close()
+            return False
+
     def _open(self):
         """Open the log file and index."""
         start_time = time.time()
@@ -110,57 +164,13 @@ class LogLogLog:
 
         # Check if index exists and is valid
         validate_start = time.time()
-        positions_exists = (self._index_path / "positions.dat").exists()
-        widths_exists = (self._index_path / "widths.dat").exists()
-        summaries_exists = (self._index_path / "summaries.dat").exists()
-        file_size_exists = self._file_size_path.exists()
+        index_exists = self._check_index_files_exist()
 
-        index_exists = positions_exists and widths_exists and summaries_exists and file_size_exists
-
-        logger.debug(
-            f"Index file check - positions: {positions_exists}, widths: {widths_exists}, summaries: {summaries_exists}, file_size: {file_size_exists}"
-        )
-
-        # No need to open file explicitly - LogFile handles that
+        logger.debug(f"Index files exist: {index_exists}")
         logger.debug(f"Using LogFile for {self.path}")
 
         if index_exists:
-            try:
-                # Try to open existing index
-                load_start = time.time()
-                self._line_index.open(create=False)
-
-                # Calculate last_position from last line offset
-                if len(self._line_index) > 0:
-                    last_offset = self._line_index.get_line_position(len(self._line_index) - 1)
-                    self.log_file.seek_to(last_offset)
-                    self.log_file.read_line()  # Read to end of last line
-                    last_position = self.log_file.get_position()
-                    logger.debug(f"Calculated last_position: {last_position:,} from offset {last_offset:,}")
-                else:
-                    last_position = 0
-                    logger.debug("Empty line index, setting last_position to 0")
-
-                # Update LogFile position
-                self.log_file.seek_to(last_position)
-
-                logger.debug(f"Index load took {time.time() - load_start:.3f}s - last_pos: {last_position:,}")
-                logger.debug(f"Loaded {len(self._line_index):,} lines")
-
-                # Check if file size has changed (shrunk = truncated)
-                cached_file_size = self._load_file_size()
-                current_file_size = self._file_stat.st_size
-                if cached_file_size is not None and current_file_size < cached_file_size:
-                    logger.info(
-                        f"File shrunk from {cached_file_size:,} to {current_file_size:,} bytes - invalidating cache"
-                    )
-                    raise Exception("File truncated")
-
-            except Exception as e:
-                logger.exception(f"Failed to load existing index: {e}, rebuilding")
-                index_exists = False
-                # Close any partially opened components
-                self._line_index.close()
+            index_exists = self._try_load_existing_index()
 
         logger.debug(f"Index validation took {time.time() - validate_start:.3f}s - valid: {index_exists}")
 
@@ -181,6 +191,51 @@ class LogLogLog:
 
         logger.info(f"Total open time: {time.time() - start_time:.3f}s")
 
+    async def _atry_load_existing_index(self) -> bool:
+        """
+        Async version: Try to load existing index.
+
+        Returns:
+            True if index loaded successfully, False if needs rebuild
+        """
+        try:
+            load_start = time.time()
+            await asyncio.to_thread(self._line_index.open, create=False)
+
+            # Calculate last_position from last line offset
+            if len(self._line_index) > 0:
+                last_offset = self._line_index.get_line_position(len(self._line_index) - 1)
+                self.log_file.seek_to(last_offset)
+                await self.log_file.aread_line()  # Read to end of last line (async)
+                last_position = self.log_file.get_position()
+                logger.debug(f"Calculated last_position: {last_position:,} from offset {last_offset:,}")
+            else:
+                last_position = 0
+                logger.debug("Empty line index, setting last_position to 0")
+
+            # Update LogFile position
+            self.log_file.seek_to(last_position)
+
+            logger.debug(f"Index load took {time.time() - load_start:.3f}s - last_pos: {last_position:,}")
+            logger.debug(f"Loaded {len(self._line_index):,} lines")
+
+            # Check if file size has changed (shrunk = truncated)
+            cached_file_size = await asyncio.to_thread(self._load_file_size)
+            current_file_size = self._file_stat.st_size
+            if cached_file_size is not None and current_file_size < cached_file_size:
+                logger.info(
+                    f"File shrunk from {cached_file_size:,} to {current_file_size:,} bytes - invalidating cache"
+                )
+                raise Exception("File truncated")
+
+            return True
+
+        except Exception as e:
+            logger.exception(f"Failed to load existing index: {e}, rebuilding")
+            # Close any partially opened components
+            self._line_index.close()
+            return False
+
     async def aopen(self):
         """Async version of _open() method for non-blocking file initialization."""
         start_time = time.time()
@@ -195,65 +250,15 @@ class LogLogLog:
         self._offset_dtype = "I" if self._file_stat.st_size < (1 << 32) else "Q"
         logger.debug(f"Using {self._offset_dtype} for line offsets ({'4' if self._offset_dtype == 'I' else '8'} bytes)")
 
-        # Check if index exists and is valid (run file checks in thread)
+        # Check if index exists and is valid
         validate_start = time.time()
+        index_exists = await asyncio.to_thread(self._check_index_files_exist)
 
-        async def check_file_exists(path):
-            return await asyncio.to_thread(path.exists)
-
-        positions_exists, widths_exists, summaries_exists, file_size_exists = await asyncio.gather(
-            check_file_exists(self._index_path / "positions.dat"),
-            check_file_exists(self._index_path / "widths.dat"),
-            check_file_exists(self._index_path / "summaries.dat"),
-            check_file_exists(self._file_size_path),
-        )
-
-        index_exists = positions_exists and widths_exists and summaries_exists and file_size_exists
-
-        logger.debug(
-            f"Index file check - positions: {positions_exists}, widths: {widths_exists}, summaries: {summaries_exists}, file_size: {file_size_exists}"
-        )
-
-        # No need to open file explicitly - LogFile handles that
+        logger.debug(f"Index files exist: {index_exists}")
         logger.debug(f"Using LogFile for {self.path}")
 
         if index_exists:
-            try:
-                # Try to open existing index (run in thread for I/O)
-                load_start = time.time()
-                await asyncio.to_thread(self._line_index.open, create=False)
-
-                # Calculate last_position from last line offset
-                if len(self._line_index) > 0:
-                    last_offset = self._line_index.get_line_position(len(self._line_index) - 1)
-                    self.log_file.seek_to(last_offset)
-                    await self.log_file.aread_line()  # Read to end of last line (async)
-                    last_position = self.log_file.get_position()
-                    logger.debug(f"Calculated last_position: {last_position:,} from offset {last_offset:,}")
-                else:
-                    last_position = 0
-                    logger.debug("Empty line index, setting last_position to 0")
-
-                # Update LogFile position
-                self.log_file.seek_to(last_position)
-
-                logger.debug(f"Index load took {time.time() - load_start:.3f}s - last_pos: {last_position:,}")
-                logger.debug(f"Loaded {len(self._line_index):,} lines")
-
-                # Check if file size has changed (shrunk = truncated)
-                cached_file_size = await asyncio.to_thread(self._load_file_size)
-                current_file_size = self._file_stat.st_size
-                if cached_file_size is not None and current_file_size < cached_file_size:
-                    logger.info(
-                        f"File shrunk from {cached_file_size:,} to {current_file_size:,} bytes - invalidating cache"
-                    )
-                    raise Exception("File truncated")
-
-            except Exception as e:
-                logger.exception(f"Failed to load existing index: {e}, rebuilding")
-                index_exists = False
-                # Close any partially opened components
-                self._line_index.close()
+            index_exists = await self._atry_load_existing_index()
 
         logger.debug(f"Index validation took {time.time() - validate_start:.3f}s - valid: {index_exists}")
 
@@ -286,44 +291,10 @@ class LogLogLog:
         self._offset_dtype = "I" if self._file_stat.st_size < (1 << 32) else "Q"
 
         # Check if index exists and is valid
-        async def check_file_exists(path):
-            return await asyncio.to_thread(path.exists)
-
-        positions_exists, widths_exists, summaries_exists, file_size_exists = await asyncio.gather(
-            check_file_exists(self._index_path / "positions.dat"),
-            check_file_exists(self._index_path / "widths.dat"),
-            check_file_exists(self._index_path / "summaries.dat"),
-            check_file_exists(self._file_size_path),
-        )
-
-        index_exists = positions_exists and widths_exists and summaries_exists and file_size_exists
+        index_exists = await asyncio.to_thread(self._check_index_files_exist)
 
         if index_exists:
-            try:
-                # Try to open existing index
-                await asyncio.to_thread(self._line_index.open, create=False)
-
-                # Calculate last_position from last line offset
-                if len(self._line_index) > 0:
-                    last_offset = self._line_index.get_line_position(len(self._line_index) - 1)
-                    self.log_file.seek_to(last_offset)
-                    await self.log_file.aread_line()
-                    last_position = self.log_file.get_position()
-                else:
-                    last_position = 0
-
-                self.log_file.seek_to(last_position)
-
-                # Check if file size has changed (shrunk = truncated)
-                cached_file_size = await asyncio.to_thread(self._load_file_size)
-                current_file_size = self._file_stat.st_size
-                if cached_file_size is not None and current_file_size < cached_file_size:
-                    logger.info("File truncated - invalidating cache")
-                    raise Exception("File truncated")
-
-            except Exception as e:
-                logger.info(f"Failed to load existing index: {e}, rebuilding")
-                index_exists = False
+            index_exists = await self._atry_load_existing_index()
 
         if not index_exists:
             # Create new index
@@ -366,15 +337,8 @@ class LogLogLog:
         """Context manager exit."""
         self.close()
 
-    def update(self):
-        """Update index with new lines from the file."""
-        start_time = time.time()
-
-        # Check if file has grown
-        current_size = self.log_file.get_size()
-        current_position = self.log_file.get_position()
-        logger.debug(f"File size: {current_size:,}, position: {current_position:,}")
-
+    def _check_and_handle_truncation(self, current_size: int, current_position: int):
+        """Check for file truncation and rebuild index if needed."""
         if current_size < current_position:
             # File was truncated or rotated
             logger.info(
@@ -385,6 +349,17 @@ class LogLogLog:
             self._line_index.open(create=True)
             # Reset position to start over
             self.log_file.seek_to(0)
+
+    def update(self):
+        """Update index with new lines from the file."""
+        start_time = time.time()
+
+        # Check if file has grown
+        current_size = self.log_file.get_size()
+        current_position = self.log_file.get_position()
+        logger.debug(f"File size: {current_size:,}, position: {current_position:,}")
+
+        self._check_and_handle_truncation(current_size, current_position)
 
         # Stream process new content instead of reading entire file into RAM
         stream_start = time.time()
@@ -424,6 +399,19 @@ class LogLogLog:
 
         logger.info(f"Total update time: {time.time() - start_time:.3f}s")
 
+    async def _acheck_and_handle_truncation(self, current_size: int, current_position: int):
+        """Async version: Check for file truncation and rebuild index if needed."""
+        if current_size < current_position:
+            # File was truncated or rotated
+            logger.info(
+                f"File truncated/rotated - rebuilding index (size: {current_size:,}, pos: {current_position:,})"
+            )
+            await asyncio.to_thread(self._clear_index)
+            self._line_index.close()
+            self._line_index.open(create=True)
+            # Reset position to start over
+            self.log_file.seek_to(0)
+
     async def aupdate(self):
         """Async version of update() method for non-blocking file processing."""
         start_time = time.time()
@@ -437,16 +425,7 @@ class LogLogLog:
         current_position = self.log_file.get_position()
         logger.debug(f"File size: {current_size:,}, position: {current_position:,}")
 
-        if current_size < current_position:
-            # File was truncated or rotated
-            logger.info(
-                f"File truncated/rotated - rebuilding index (size: {current_size:,}, pos: {current_position:,})"
-            )
-            await asyncio.to_thread(self._clear_index)
-            self._line_index.close()
-            self._line_index.open(create=True)
-            # Reset position to start over
-            self.log_file.seek_to(0)
+        await self._acheck_and_handle_truncation(current_size, current_position)
 
         # Stream process new content instead of reading entire file into RAM
         stream_start = time.time()

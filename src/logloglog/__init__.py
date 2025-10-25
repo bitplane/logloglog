@@ -2,12 +2,18 @@
 
 import logging
 import sys
+from importlib.metadata import version, PackageNotFoundError
 
 
 from .logloglog import LogLogLog
 from .widthview import WidthView
 
-__version__ = "0.0.1"
+try:
+    __version__ = version("logloglog")
+except PackageNotFoundError:
+    # Package is not installed
+    __version__ = "0.0.0+dev"
+
 __all__ = ["LogLogLog", "WidthView", "configure_logging"]
 
 
