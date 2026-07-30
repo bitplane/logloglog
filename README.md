@@ -15,7 +15,9 @@ supports egregious sizes and low seek times?
 # makes log.log.log from /var/log
 make log
 # run the demo
-./demo/textual_demo.py
+./demos/textual_demo.py
+# print a wrapped log view
+python -m logloglog logs/log.log.log --width 80
 ```
 
 ## 🔗 links
@@ -38,4 +40,3 @@ make log
   - [ ] Periodic cleanup of cache directories
   - [ ] Check file existence by inode lookup
   - [ ] Handle file rotation and moves
-

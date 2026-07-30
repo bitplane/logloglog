@@ -2,6 +2,8 @@
 
 import tempfile
 import os
+import subprocess
+import sys
 import pytest
 from pathlib import Path
 from logloglog import LogLogLog
@@ -101,6 +103,32 @@ def test_simple_lines(temp_cache_dir):
         assert len(lines) == 4
 
         log.close()
+    finally:
+        os.unlink(log_path)
+
+
+def test_run_as_module(temp_cache_dir):
+    """Test running logloglog as a module."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("abcdef\nxy\n")
+        log_path = f.name
+
+    env = os.environ.copy()
+    env["XDG_CACHE_HOME"] = str(temp_cache_dir / "xdg-cache")
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "logloglog", log_path, "--width", "3"],
+            capture_output=True,
+            env=env,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+
+        assert result.returncode == 0
+        assert result.stdout.splitlines() == ["abc", "def", "xy"]
+        assert result.stderr == ""
     finally:
         os.unlink(log_path)
 

@@ -42,8 +42,8 @@ dev = [
     "pydoc-markdown"
 ]
 textual = [
-    "textual",
-    "textual-window"
+    "textual>=5.1,<6",
+    "textual-window==0.8.1"
 ]
 
 [project.scripts]

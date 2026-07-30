@@ -1,6 +1,7 @@
 """Simple line indexing with periodic summaries for efficient wrapping calculations."""
 
 import logging
+from bisect import bisect_right
 from pathlib import Path
 from typing import Tuple
 from arrayfile import Array
@@ -32,6 +33,7 @@ class LineIndex:
         self._current_block_width_counts = {}  # Track widths in current 1000-line block
         self._pending_positions = []  # Batch positions for extend()
         self._pending_widths = []  # Batch widths for extend()
+        self._summary_prefix_cache = {}  # width -> cumulative summary rows
 
     def open(self, create: bool = False):
         """Open index files."""
@@ -90,6 +92,7 @@ class LineIndex:
             self._flush_pending()
             self._store_summary()
             self._current_block_width_counts.clear()
+            self._summary_prefix_cache.clear()
 
     def _flush_pending(self):
         """Flush pending positions and widths to disk."""
@@ -228,28 +231,18 @@ class LineIndex:
         Returns:
             Tuple of (line_number, row_offset_within_line)
         """
+        if display_row < 0:
+            raise IndexError(f"Display row {display_row} out of range")
         if width <= 0:
             raise IndexError(f"Display row {display_row} out of range")  # No display possible
         if width > MAX_WIDTH:
             width = MAX_WIDTH
 
-        current_row = 0
-
-        # Binary search through summaries to find the right range
         complete_summaries = self._line_count // SUMMARY_INTERVAL
-        summary_idx = 0
 
-        # Find which summary block contains our display row
-        for i in range(complete_summaries):
-            summary_offset = i * MAX_WIDTH + (width - 1)
-            summary_rows = self._summaries[summary_offset]
-            if current_row + summary_rows > display_row:
-                summary_idx = i
-                break
-            current_row += summary_rows
-        else:
-            # It's in the incomplete last block
-            summary_idx = complete_summaries
+        summary_prefix_rows = self._get_summary_prefix_rows(width, complete_summaries)
+        summary_idx = bisect_right(summary_prefix_rows, display_row) - 1
+        current_row = summary_prefix_rows[summary_idx]
 
         # Linear search within the summary block
         start_line = summary_idx * SUMMARY_INTERVAL
@@ -268,6 +261,20 @@ class LineIndex:
 
         # Display row is beyond the end
         raise IndexError(f"Display row {display_row} out of range")
+
+    def _get_summary_prefix_rows(self, width: int, complete_summaries: int) -> list[int]:
+        """Return cumulative row totals for complete summary blocks."""
+        cached = self._summary_prefix_cache.get(width)
+        if cached is not None and len(cached) == complete_summaries + 1:
+            return cached
+
+        prefix_rows = [0]
+        width_offset = width - 1
+        for i in range(complete_summaries):
+            prefix_rows.append(prefix_rows[-1] + self._summaries[i * MAX_WIDTH + width_offset])
+
+        self._summary_prefix_cache[width] = prefix_rows
+        return prefix_rows
 
     def __len__(self) -> int:
         """Get total number of indexed lines."""
