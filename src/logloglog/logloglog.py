@@ -338,8 +338,8 @@ class LogLogLog:
 
     def close(self):
         """Close all resources."""
-        # LogFile handles its own file management
         self._line_index.close()
+        self.log_file.close()
 
     def __enter__(self):
         """Context manager entry."""

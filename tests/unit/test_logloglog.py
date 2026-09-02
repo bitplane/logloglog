@@ -333,6 +333,7 @@ def test_context_manager(temp_cache_dir):
         with LogLogLog(log_path, cache=Cache(temp_cache_dir)) as log:
             assert len(log) == 1
             assert log[0] == "Test line"
+        assert log.log_file._file_handle is None
     finally:
         os.unlink(log_path)
 
