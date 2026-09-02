@@ -156,6 +156,18 @@ class LogFile:
         """
         return self._read_position
 
+    def is_line_terminated_at(self, position: int) -> bool:
+        """Return whether the byte immediately before position ends a line."""
+        if position <= 0:
+            return True
+
+        try:
+            with open(self.path, "rb") as file:
+                file.seek(position - 1)
+                return file.read(1) == b"\n"
+        except (IOError, OSError):
+            return False
+
     def reset(self) -> None:
         """Reset read position to beginning of file."""
         self._read_position = 0

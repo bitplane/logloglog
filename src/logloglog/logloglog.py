@@ -340,7 +340,10 @@ class LogLogLog:
 
     def _check_and_handle_truncation(self, current_size: int, current_position: int):
         """Check for file truncation and rebuild index if needed."""
-        if current_size < current_position:
+        continued_partial_line = current_size > current_position and not self.log_file.is_line_terminated_at(
+            current_position
+        )
+        if current_size < current_position or continued_partial_line:
             # File was truncated or rotated
             logger.info(
                 f"File truncated/rotated - rebuilding index (size: {current_size:,}, pos: {current_position:,})"
@@ -403,7 +406,10 @@ class LogLogLog:
 
     async def _acheck_and_handle_truncation(self, current_size: int, current_position: int):
         """Async version: Check for file truncation and rebuild index if needed."""
-        if current_size < current_position:
+        continued_partial_line = current_size > current_position and not await asyncio.to_thread(
+            self.log_file.is_line_terminated_at, current_position
+        )
+        if current_size < current_position or continued_partial_line:
             # File was truncated or rotated
             logger.info(
                 f"File truncated/rotated - rebuilding index (size: {current_size:,}, pos: {current_position:,})"

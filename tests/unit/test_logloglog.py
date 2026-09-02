@@ -189,6 +189,25 @@ def test_update(temp_cache_dir):
         os.unlink(log_path)
 
 
+def test_update_continues_unterminated_final_line(temp_cache_dir):
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as file:
+        file.write("abc")
+        log_path = file.name
+
+    try:
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        assert list(log) == ["abc"]
+
+        with open(log_path, "a") as file:
+            file.write("def\n")
+
+        log.update()
+        assert list(log) == ["abcdef"]
+        log.close()
+    finally:
+        os.unlink(log_path)
+
+
 def test_wrapped_view(temp_cache_dir):
     """Test LogView with wrapping."""
     # Create lines of known width
