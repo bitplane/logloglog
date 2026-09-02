@@ -540,15 +540,19 @@ class LogLogLog:
         Raises:
             IOError: If LogFile was opened in read-only mode
         """
-        # Get position before append
-        raw_pos = self.log_file.get_size()
+        if line.endswith("\r\n"):
+            line = line[:-2]
+        elif line.endswith(("\r", "\n")):
+            line = line[:-1]
+        if "\r" in line or "\n" in line:
+            raise ValueError("append() accepts exactly one logical line")
 
         # Write to file using LogFile
         self.log_file.append_line(line)
 
-        # Update index
-        width = self.get_width(line)
-        self._line_index.append_line(raw_pos, width)
+        # Read the normalized stored line through the regular update path. This
+        # also rebuilds the index if the previous final line was unterminated.
+        self.update()
 
         # Update file stats
         self._file_stat = os.stat(self.path)

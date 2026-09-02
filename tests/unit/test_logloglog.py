@@ -164,6 +164,26 @@ def test_append(temp_cache_dir):
         os.unlink(log_path)
 
 
+def test_append_normalizes_newlines_and_rejects_multiple_lines(temp_cache_dir):
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as file:
+        file.write("partial")
+        log_path = file.name
+
+    try:
+        log = LogLogLog(log_path, cache=Cache(temp_cache_dir))
+        log.append(" line\n")
+
+        assert list(log) == ["partial line"]
+        assert len(log.width(len("partial line"))) == 1
+
+        with pytest.raises(ValueError, match="exactly one logical line"):
+            log.append("second\nthird")
+        assert list(log) == ["partial line"]
+        log.close()
+    finally:
+        os.unlink(log_path)
+
+
 def test_update(temp_cache_dir):
     """Test updating with externally added lines."""
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
