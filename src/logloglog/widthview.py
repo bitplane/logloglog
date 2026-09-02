@@ -2,6 +2,10 @@
 
 from typing import Iterator, Tuple, TYPE_CHECKING
 
+from wcwidth import wcwidth
+
+from .line_index import MAX_WIDTH
+
 if TYPE_CHECKING:
     from .logloglog import LogLogLog
 
@@ -18,8 +22,28 @@ class WidthView:
             width: Terminal width for wrapping
         """
         self._logloglog = logloglog
-        self._width = width
+        self._width = min(width, MAX_WIDTH)
         self._cached_length = None
+
+    def _wrap_line(self, line: str) -> list[str]:
+        """Split a line into rows measured in terminal cells."""
+        if not line:
+            return [""]
+
+        rows = [""]
+        cell_offset = 0
+
+        for character in line:
+            character_width = max(0, wcwidth(character))
+            row = cell_offset // self._width if character_width else len(rows) - 1
+            while len(rows) <= row:
+                rows.append("")
+            rows[row] += character
+            cell_offset += character_width
+
+        expected_rows = max(1, (cell_offset + self._width - 1) // self._width)
+        rows.extend([""] * (expected_rows - len(rows)))
+        return rows
 
     def line_at(self, row: int) -> Tuple[int, int]:
         """
@@ -80,11 +104,7 @@ class WidthView:
         # Get the line and calculate the wrapped portion
         line = self._logloglog[line_no]
 
-        # Calculate start and end positions for this display row
-        start_pos = line_offset * self._width
-        end_pos = min(start_pos + self._width, len(line))
-
-        return line[start_pos:end_pos]
+        return self._wrap_line(line)[line_offset]
 
     def __len__(self) -> int:
         """Get total number of display rows."""

@@ -208,6 +208,16 @@ def test_multi_line_wrapping(log_with_custom_content):
     log.close()
 
 
+def test_view_wraps_by_terminal_cell_width(log_with_custom_content):
+    log = log_with_custom_content("日本語\n")
+
+    view = log.width(2)
+
+    assert len(view) == 3
+    assert list(view) == ["日", "本", "語"]
+    log.close()
+
+
 def test_view_with_real_file(log_with_custom_content):
     """Test view creation works with actual content."""
     content = "Short line\n" + "x" * 100 + "\nAnother line\n"
