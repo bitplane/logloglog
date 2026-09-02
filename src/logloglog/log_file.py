@@ -72,7 +72,7 @@ class LogFile:
             List of lines without trailing newlines.
         """
         lines = []
-        while line := self.read_line():
+        while (line := self.read_line()) is not None:
             lines.append(line)
         return lines
 
