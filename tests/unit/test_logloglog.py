@@ -395,6 +395,28 @@ def test_file_modification_detection(temp_cache_dir):
         os.unlink(log_path)
 
 
+def test_same_size_file_modification_rebuilds_index(temp_cache_dir):
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as file:
+        file.write("aa\nbb\n")
+        log_path = file.name
+
+    try:
+        cache = Cache(temp_cache_dir)
+        with LogLogLog(log_path, cache=cache) as log:
+            assert list(log) == ["aa", "bb"]
+
+        previous_mtime = os.stat(log_path).st_mtime_ns
+        with open(log_path, "w") as file:
+            file.write("a\nbbb\n")
+        os.utime(log_path, ns=(previous_mtime + 1_000_000_000, previous_mtime + 1_000_000_000))
+
+        with LogLogLog(log_path, cache=cache) as log:
+            assert list(log) == ["a", "bbb"]
+            assert log.row_for_line(1, 1) == 1
+    finally:
+        os.unlink(log_path)
+
+
 def test_file_truncation_detection(temp_cache_dir):
     """Test that file truncation is detected properly."""
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:

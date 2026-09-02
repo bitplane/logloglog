@@ -133,13 +133,15 @@ class LogLogLog:
             logger.debug(f"Loaded {len(self._line_index):,} lines")
 
             # Check if file size has changed (shrunk = truncated)
-            cached_file_size = self._load_file_size()
+            cached_file_size, cached_mtime_ns = self._load_file_metadata()
             current_file_size = self._file_stat.st_size
-            if cached_file_size is not None and current_file_size < cached_file_size:
-                logger.info(
-                    f"File shrunk from {cached_file_size:,} to {current_file_size:,} bytes - invalidating cache"
-                )
-                raise Exception("File truncated")
+            file_shrank = cached_file_size is not None and current_file_size < cached_file_size
+            same_size_file_changed = (
+                cached_file_size == current_file_size and cached_mtime_ns != self._file_stat.st_mtime_ns
+            )
+            if file_shrank or same_size_file_changed:
+                logger.info("File metadata changed - invalidating cache")
+                raise Exception("Cached index is stale")
 
             return True
 
@@ -221,13 +223,15 @@ class LogLogLog:
             logger.debug(f"Loaded {len(self._line_index):,} lines")
 
             # Check if file size has changed (shrunk = truncated)
-            cached_file_size = await asyncio.to_thread(self._load_file_size)
+            cached_file_size, cached_mtime_ns = await asyncio.to_thread(self._load_file_metadata)
             current_file_size = self._file_stat.st_size
-            if cached_file_size is not None and current_file_size < cached_file_size:
-                logger.info(
-                    f"File shrunk from {cached_file_size:,} to {current_file_size:,} bytes - invalidating cache"
-                )
-                raise Exception("File truncated")
+            file_shrank = cached_file_size is not None and current_file_size < cached_file_size
+            same_size_file_changed = (
+                cached_file_size == current_file_size and cached_mtime_ns != self._file_stat.st_mtime_ns
+            )
+            if file_shrank or same_size_file_changed:
+                logger.info("File metadata changed - invalidating cache")
+                raise Exception("Cached index is stale")
 
             return True
 
@@ -305,16 +309,23 @@ class LogLogLog:
 
     def _save_file_size(self, file_size):
         """Save the file size to cache metadata."""
+        mtime_ns = os.stat(self.path).st_mtime_ns
         with open(self._file_size_path, "w") as f:
-            f.write(str(file_size))
+            f.write(f"{file_size}\n{mtime_ns}\n")
+
+    def _load_file_metadata(self):
+        """Load cached file size and modification time."""
+        try:
+            values = self._file_size_path.read_text().splitlines()
+            file_size = int(values[0])
+            mtime_ns = int(values[1]) if len(values) > 1 else None
+            return file_size, mtime_ns
+        except (FileNotFoundError, ValueError, IndexError):
+            return None, None
 
     def _load_file_size(self):
         """Load the cached file size, returns None if not found."""
-        try:
-            with open(self._file_size_path, "r") as f:
-                return int(f.read().strip())
-        except (FileNotFoundError, ValueError):
-            return None
+        return self._load_file_metadata()[0]
 
     def _clear_index(self):
         """Clear the index directory."""
